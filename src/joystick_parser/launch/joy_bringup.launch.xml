@@ -1,0 +1,4 @@
+<launch>
+    <node pkg="joy" exec="joy_node" name="joy_node"/>
+    <node pkg="joystick_parser" exec="joystick_parser" name="joystick_parser"/>
+</launch>
