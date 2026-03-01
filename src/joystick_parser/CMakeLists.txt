@@ -17,8 +17,6 @@ target_include_directories(joystick_parser PUBLIC
   $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
 target_compile_features(joystick_parser PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 
-
-add_executable(joystick_parser src/joystick_parser_node.cpp)
 ament_target_dependencies(joystick_parser
   rclcpp
   sensor_msgs
@@ -27,16 +25,9 @@ ament_target_dependencies(joystick_parser
 install(TARGETS joystick_parser
   DESTINATION lib/${PROJECT_NAME})
 
-if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  # the following line skips the linter which checks for copyrights
-  # comment the line when a copyright and license is added to all source files
-  set(ament_cmake_copyright_FOUND TRUE)
-  # the following line skips cpplint (only works in a git repo)
-  # comment the line when this package is in a git repo and when
-  # a copyright and license is added to all source files
-  set(ament_cmake_cpplint_FOUND TRUE)
-  ament_lint_auto_find_test_dependencies()
-endif()
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
 
 ament_package()
