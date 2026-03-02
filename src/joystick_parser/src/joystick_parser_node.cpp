@@ -17,17 +17,23 @@ class JoystickParser : public rclcpp::Node
 public:
   JoystickParser() : Node("joystick_parser")
   {
-    subscription_ = this->create_subscription<sensor_msgs::msg::Joy>(
-        "joy", 10, std::bind(&JoystickParser::joy_callback, this, _1));
-    combo_intent_pub_ = this->create_publisher<custom_interfaces::msg::ComboIntent>("combo_intent", 10);
-    button_intent_pub_ = this->create_publisher<custom_interfaces::msg::ButtonIntent>("button_intent", 10);
-    joystick_intent_pub_ = this->create_publisher<custom_interfaces::msg::JoystickIntent>("joystick_intent", 10);
-    trigger_intent_pub_ = this->create_publisher<custom_interfaces::msg::TriggerIntent>("trigger_intent", 10);
+    create_subscriptions(); // 批量创建订阅器
+    create_publishers();    // 批量创建发布器
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(100),
-        std::bind(&JoystickParser::timer_callback, this));
+        std::bind(&JoystickParser::timer_callback, this)); // 定时器回调函数用于定期发布轴状态和扳机状态
   }
 private:
+    void create_subscriptions() {
+        subscription_ = this->create_subscription<sensor_msgs::msg::Joy>(
+            "joy", 10, std::bind(&JoystickParser::joy_callback, this, _1));
+    }
+    void create_publishers() {
+        combo_intent_pub_ = this->create_publisher<custom_interfaces::msg::ComboIntent>("combo_intent", 10);
+        button_intent_pub_ = this->create_publisher<custom_interfaces::msg::ButtonIntent>("button_intent", 10);
+        joystick_intent_pub_ = this->create_publisher<custom_interfaces::msg::JoystickIntent>("joystick_intent", 10);
+        trigger_intent_pub_ = this->create_publisher<custom_interfaces::msg::TriggerIntent>("trigger_intent", 10);
+    }
     // joy回调函数，解析按钮状态并发布ButtonIntent消息
     void joy_callback(const sensor_msgs::msg::Joy &msg)
     {
