@@ -18,6 +18,7 @@ set(msg_files
   "msg/ComboIntent.msg"
   "msg/RobotState.msg"
   "msg/MenuNavigation.msg"
+  "msg/TriggerIntent.msg"
 )
 
 set(srv_files
