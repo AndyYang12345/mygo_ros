@@ -41,6 +41,10 @@ public:
         float x = 0.0;
         float y = 0.0;
         rclcpp::Time timestamp;
+        bool is_active(const rclcpp::Node* node, double timeout_seconds = 0.2) const {
+            auto now = node->now();
+            return (now - timestamp).seconds() < timeout_seconds;
+        }
     };
 
     const JoystickData &getLeftJoystick() const;

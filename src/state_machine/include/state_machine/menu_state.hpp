@@ -51,14 +51,11 @@ private:
     
     // 方向对应的功能（可以根据实际需求配置）
     const std::vector<std::string> direction_functions_ = {
-        "ARM Mode",      // 右 → 机械臂模式
-        "Gripper",       // 右上 → 夹爪控制
-        "Preset 1",      // 上 → 预设动作1
-        "Preset 2",      // 左上 → 预设动作2
-        "Settings",      // 左 → 设置
-        "Calibration",   // 左下 → 校准
-        "Home",          // 下 → 归位
-        "Power Off"      // 右下 → 关机
+        "Manual Arm Control",   // 右
+        "Find Energy Cylinder", // 右上
+        "Chassis Control",      // 上
+        "Home",                 // 下 本质是idle状态，保持不动加预设机械臂动作
+        "Vision Task"           // 左
     };
     
     // 当前选中的方向
@@ -90,7 +87,7 @@ private:
         }
         
         // 计算角度（弧度转角度）
-        double angle = atan2(y, x) * 180 / 3.14;
+        double angle = atan2(y, -x) * 180 / 3.14;
         
         // 将角度转换为8方向
         // 角度范围：-180 到 180
@@ -139,10 +136,20 @@ private:
         if (dir == MenuDirection::NONE) return;
         
         int index = static_cast<int>(dir);
-        std::string function = direction_functions_[index];
+        if (index < 0 || index >= static_cast<int>(direction_names_.size())) {
+            RCLCPP_WARN(context->get_logger(), "Invalid menu direction index: %d", index);
+            return;
+        }
+
+        std::string function = getFunctionForDirection(dir);
         
-        // RCLCPP_INFO(context->get_logger(), "Menu selected: %s -> %s", 
-        //            direction_names_[index].c_str(), function.c_str());
+        RCLCPP_INFO(context->get_logger(), "Menu selected: %s -> %s", 
+                   direction_names_[index].c_str(), function.c_str());
+
+        if (function == "Unknown") {
+            RCLCPP_WARN(context->get_logger(), "No function mapped for %s", direction_names_[index].c_str());
+            return;
+        }
         
         // 根据选中的功能执行对应动作
         switch(dir) {
@@ -155,7 +162,8 @@ private:
                 break;
                 
             case MenuDirection::UP:  // 预设动作1
-                RCLCPP_INFO(context->get_logger(), "UP");
+                RCLCPP_INFO(context->get_logger(), "%s", getFunctionForDirection(dir).c_str());
+                context->changeState(2);  // PRESET
                 break;
                 
             case MenuDirection::UP_LEFT:  // 预设动作2

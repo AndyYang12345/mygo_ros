@@ -20,7 +20,6 @@ float32 value
 # 1: FULLY_PRESSED (完全按下)
 # 2: PRESSED (按下但未完全按下)
 uint8 event_type
-a
 # 时间戳
 builtin_interfaces/Time timestamp
 

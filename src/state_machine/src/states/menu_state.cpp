@@ -53,11 +53,12 @@ void MenuState::handleTrigger(RobotStateMachineNode* context,
             // 有选中项，执行对应功能
             executeSelectedFunction(context, current_selection_);
             trigger_state_.selection_made = true;
+            return;
         } else {
             RCLCPP_INFO(context->get_logger(), "LT released - No selection, returning to previous mode");
         }
         
-        // 无论是否选中，释放扳机后退出菜单模式并返回进入菜单前的模式
+        // 未选择菜单项时，释放扳机后返回进入菜单前的模式
         context->changeState(context->getStateBeforeMenu());
     }
 }
