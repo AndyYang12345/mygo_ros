@@ -6,25 +6,14 @@
 # 扳机编号
 # 0: LT (左扳机) - Left Trigger
 # 1: RT (右扳机) - Right Trigger
-# 2: LT2 (如果有第二个左扳机)
-# 3: RT2 (如果有第二个右扳机)
 uint8 trigger_id
 
 # 扳机按压力度
-# 范围: 0.0 到 1.0
-# 0.0: 完全松开
-# 1.0: 完全按下
+# 范围: -1.0 到 1.0
+# 1.0: 完全松开
+# -1.0: 完全按下
 # 中间值表示不同程度的按下
 float32 value
-
-# 触发阈值分段（可选，用于更精细的控制）
-# 根据value自动计算
-# 0: RELEASED - 松开 (value < 0.05)
-# 1: LIGHT_TOUCH - 轻触 (0.05 <= value < 0.2)
-# 2: HALF_PRESS - 半按 (0.2 <= value < 0.6)
-# 3: FULL_PRESS - 全按 (0.6 <= value < 0.9)
-# 4: HARD_PRESS - 用力按 (value >= 0.9)
-uint8 press_level
 
 # 事件类型
 # 0: UPDATE - 值更新（连续变化）
