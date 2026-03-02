@@ -26,18 +26,19 @@ void IdleState::handleButton(
   }
 
   switch (msg->button_id) {
-    case 0:
-      RCLCPP_INFO(context->get_logger(), "IDLE: A pressed -> switching to CHASSIS");
-      context->changeState(2);
-      break;
-    case 1:
-      RCLCPP_INFO(context->get_logger(), "IDLE: B pressed -> switching to ARM");
-      context->changeState(3);
-      break;
-    case 2:
-      RCLCPP_INFO(context->get_logger(), "IDLE: X pressed -> switching to MENU");
-      context->changeState(4);
-      break;
+    // 仿照下方格式可以进行状态转换
+    // case 0:
+    //   RCLCPP_INFO(context->get_logger(), "IDLE: A pressed -> switching to CHASSIS");
+    //   context->changeState(2);
+    //   break;
+    // case 1:
+    //   RCLCPP_INFO(context->get_logger(), "IDLE: B pressed -> switching to ARM");
+    //   context->changeState(3);
+    //   break;
+    // case 2:
+    //   RCLCPP_INFO(context->get_logger(), "IDLE: X pressed -> switching to MENU");
+    //   context->changeState(4);
+    //   break;
     default:
       break;
   }

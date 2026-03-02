@@ -176,7 +176,7 @@ void RobotStateMachineNode::setupPublishers()
 void RobotStateMachineNode::setupSubscribers()
 {
   button_sub_ = this->create_subscription<custom_interfaces::msg::ButtonIntent>(
-    "/intent/button", 10,
+    "button_intent", 10,
     [this](const custom_interfaces::msg::ButtonIntent::SharedPtr msg) {
       if (current_state_) {
         current_state_->handleButton(this, msg);
@@ -184,7 +184,7 @@ void RobotStateMachineNode::setupSubscribers()
     });
 
   joystick_sub_ = this->create_subscription<custom_interfaces::msg::JoystickIntent>(
-    "/intent/joystick", 10,
+    "joystick_intent", 10,
     [this](const custom_interfaces::msg::JoystickIntent::SharedPtr msg) {
       if (msg->joystick_id == 0) {
         left_joystick_.x = msg->x;
@@ -202,7 +202,7 @@ void RobotStateMachineNode::setupSubscribers()
     });
 
   trigger_sub_ = this->create_subscription<custom_interfaces::msg::TriggerIntent>(
-    "/intent/trigger", 10,
+    "trigger_intent", 10,
     [this](const custom_interfaces::msg::TriggerIntent::SharedPtr msg) {
       if (current_state_) {
         current_state_->handleTrigger(this, msg);
@@ -210,7 +210,7 @@ void RobotStateMachineNode::setupSubscribers()
     });
 
   combo_sub_ = this->create_subscription<custom_interfaces::msg::ComboIntent>(
-    "/intent/combo", 10,
+    "combo_intent", 10,
     [this](const custom_interfaces::msg::ComboIntent::SharedPtr msg) {
       if (current_state_) {
         current_state_->handleCombo(this, msg);
