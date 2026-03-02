@@ -1,0 +1,16 @@
+# 请求
+# 目标模式
+# 0: IDLE
+# 1: CHASSIS
+# 2: ARM
+# 3: MENU
+# 4: PRESET
+uint8 target_mode
+
+# 附加参数（如菜单选中项）
+uint8 sub_mode
+---
+# 响应
+bool success
+string message
+builtin_interfaces/Time timestamp

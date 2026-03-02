@@ -1,3 +1,6 @@
+/*
+    @brief 订阅joy话题，解析成高级抽象意图并发布按钮和轴的状态
+*/
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/joy.hpp>
 
