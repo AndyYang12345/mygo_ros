@@ -3,6 +3,9 @@
 */
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/joy.hpp>
+#include <custom_interfaces/msg/combo_intent.hpp>
+#include <custom_interfaces/msg/button_intent.hpp>
+#include <custom_interfaces/msg/joystick_intent.hpp>
 
 using std::placeholders::_1;
 
@@ -100,6 +103,10 @@ private:
   }
 
   rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr subscription_;
+  rclcpp::Publisher<custom_interfaces::msg::ComboIntent>::SharedPtr combo_intent_pub_;
+  rclcpp::Publisher<custom_interfaces::msg::ButtonIntent>::SharedPtr button_intent_pub_;
+  rclcpp::Publisher<custom_interfaces::msg::JoystickIntent>::SharedPtr joystick_intent_pub_;
+
 };
 
 int main(int argc, char *argv[])

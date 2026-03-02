@@ -10,6 +10,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(custom_interfaces REQUIRED)
 
 add_executable(joystick_parser src/joystick_parser_node.cpp)
 target_include_directories(joystick_parser PUBLIC
@@ -20,6 +21,7 @@ target_compile_features(joystick_parser PUBLIC c_std_99 cxx_std_17)  # Require C
 ament_target_dependencies(joystick_parser
   rclcpp
   sensor_msgs
+  custom_interfaces
 )
 
 install(TARGETS joystick_parser

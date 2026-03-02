@@ -5,7 +5,8 @@
             "includePath": [
                 "${default}",
                 "/home/harekasa/mygo_ws/src/joystick_parser/include/**",
-                "/opt/ros/jazzy/include/**"
+                "/opt/ros/jazzy/include/**",
+                "/home/harekasa/mygo_ws/install/custom_interfaces/**"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
