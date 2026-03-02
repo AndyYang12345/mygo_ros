@@ -16,13 +16,11 @@ uint8 trigger_id
 float32 value
 
 # 事件类型
-# 0: UPDATE - 值更新（连续变化）
-# 1: PRESSED - 从无到有 (value从<0.05变为>=0.05)
-# 2: RELEASED - 从有到无 (value从>=0.05变为<0.05)
-# 3: FULL_PRESS_REACHED - 达到全按阈值
-# 4: HALF_PRESS_REACHED - 达到半按阈值
+# 0: RELEASED (完全松开)
+# 1: FULLY_PRESSED (完全按下)
+# 2: PRESSED (按下但未完全按下)
 uint8 event_type
-
+a
 # 时间戳
 builtin_interfaces/Time timestamp
 

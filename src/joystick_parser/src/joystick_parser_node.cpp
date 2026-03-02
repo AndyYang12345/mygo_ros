@@ -100,6 +100,13 @@ private:
         custom_interfaces::msg::TriggerIntent intent_msg;
         intent_msg.trigger_id = id;
         intent_msg.value = get_axis(id == 0 ? 2 : 5);  // LT使用轴2，RT使用轴5
+        if (intent_msg.value > 0.95F) {
+            intent_msg.event_type = 0;  // RELEASED
+        } else if (abs(intent_msg.value) < -0.95) {
+            intent_msg.event_type = 1;  // FULLY_PRESSED
+        } else {
+            intent_msg.event_type = 2;  // PRESSED
+        }
         intent_msg.timestamp = this->now();
         intent_msg.source = "joystick";
         trigger_intent_pub_->publish(intent_msg);
