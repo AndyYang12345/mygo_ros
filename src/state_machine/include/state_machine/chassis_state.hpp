@@ -7,6 +7,7 @@
 class ChassisState : public RobotState
 {
 public:
+    ChassisState();
     std::string getName() const override;
     uint8_t getStateEnum() const override;
 
@@ -28,17 +29,19 @@ public:
     void update(RobotStateMachineNode *context) override;
 
     enum class ArmMode {
-        Home,               // 起始模式，机械臂折叠位于发车区
-        NormalDetection,    // 正常检测模式，机械臂yaw用右摇杆控制，底盘行进用左摇杆控制
-        CylinderSubmission, // 自动提交能量单元
-        CubeSubmission,     // 自动提交方块
-        CylinderCollection, // 自动用机械臂夹取能量单元
-        CubeCollection,     // 自动用机械臂夹取方块
-        UnderBridge         // 过桥模式，底盘行进用左摇杆控制，机械臂保持在过桥高度 
+        Home,               // 起始模式，机械臂折叠位于发车区                           默认进入
+        NormalDetection,    // 正常检测模式，机械臂yaw用右摇杆控制，底盘行进用左摇杆控制    手动选择
+        CylinderSubmission, // 自动提交能量单元                                       手动选择
+        CubeSubmission,     // 自动提交方块                                          手动选择
+        CylinderCollection, // 自动用机械臂夹取能量单元                                特殊进入
+        CubeCollection,     // 自动用机械臂夹取方块                                   特殊进入
+        UnderBridge         // 过桥模式，底盘行进用左摇杆控制，机械臂保持在过桥高度         手动选择
     };
     // 获取和设置当前机械臂模式
     ArmMode getArmMode() const { return arm_mode_; }
-    void setArmMode(ArmMode mode);
+    // 统一的模式切换函数，负责调用对应的onEnter和onExit函数，加入生命周期回调
+    void setArmMode(RobotStateMachineNode *context, ArmMode new_mode);
+    
 
 private:
     // ==================== 机械臂模式枚举 ====================
@@ -65,6 +68,8 @@ private:
         ButtonHandler button;
         TriggerHandler trigger;
         UpdateHandler update;
+        void (ChassisState::*onEnter)(RobotStateMachineNode *context);
+        void (ChassisState::*onExit)(RobotStateMachineNode *context);
     };
 
     // 初始化函数指针表
@@ -76,43 +81,53 @@ private:
 
     // ==================== 各模式的实现函数声明 ====================
     
+    // 子模式进入回调（当子模式切换时调用）
+    void onArmModeEnter(RobotStateMachineNode *context, ArmMode new_mode);
+
     // Home模式
+    void onEnterHomeMode(RobotStateMachineNode *context);
     void handleHomeJoystick(RobotStateMachineNode *context, const custom_interfaces::msg::JoystickIntent::SharedPtr msg);
     void handleHomeButton(RobotStateMachineNode *context, const custom_interfaces::msg::ButtonIntent::SharedPtr msg);
     void handleHomeTrigger(RobotStateMachineNode *context, const custom_interfaces::msg::TriggerIntent::SharedPtr msg);
     void updateHome(RobotStateMachineNode *context);
 
     // NormalDetection模式
+    void onEnterNormalDetectionMode(RobotStateMachineNode *context);
     void handleNormalDetectionJoystick(RobotStateMachineNode *context, const custom_interfaces::msg::JoystickIntent::SharedPtr msg);
     void handleNormalDetectionButton(RobotStateMachineNode *context, const custom_interfaces::msg::ButtonIntent::SharedPtr msg);
     void handleNormalDetectionTrigger(RobotStateMachineNode *context, const custom_interfaces::msg::TriggerIntent::SharedPtr msg);
     void updateNormalDetection(RobotStateMachineNode *context);
 
     // CylinderSubmission模式
+    void onEnterCylinderSubmissionMode(RobotStateMachineNode *context);
     void handleCylinderSubmissionJoystick(RobotStateMachineNode *context, const custom_interfaces::msg::JoystickIntent::SharedPtr msg);
     void handleCylinderSubmissionButton(RobotStateMachineNode *context, const custom_interfaces::msg::ButtonIntent::SharedPtr msg);
     void handleCylinderSubmissionTrigger(RobotStateMachineNode *context, const custom_interfaces::msg::TriggerIntent::SharedPtr msg);
     void updateCylinderSubmission(RobotStateMachineNode *context);
 
     // CubeSubmission模式
+    void onEnterCubeSubmissionMode(RobotStateMachineNode *context);
     void handleCubeSubmissionJoystick(RobotStateMachineNode *context, const custom_interfaces::msg::JoystickIntent::SharedPtr msg);
     void handleCubeSubmissionButton(RobotStateMachineNode *context, const custom_interfaces::msg::ButtonIntent::SharedPtr msg);
     void handleCubeSubmissionTrigger(RobotStateMachineNode *context, const custom_interfaces::msg::TriggerIntent::SharedPtr msg);
     void updateCubeSubmission(RobotStateMachineNode *context);
 
     // CylinderCollection模式
+    void onEnterCylinderCollectionMode(RobotStateMachineNode *context);
     void handleCylinderCollectionJoystick(RobotStateMachineNode *context, const custom_interfaces::msg::JoystickIntent::SharedPtr msg);
     void handleCylinderCollectionButton(RobotStateMachineNode *context, const custom_interfaces::msg::ButtonIntent::SharedPtr msg);
     void handleCylinderCollectionTrigger(RobotStateMachineNode *context, const custom_interfaces::msg::TriggerIntent::SharedPtr msg);
     void updateCylinderCollection(RobotStateMachineNode *context);
 
     // CubeCollection模式
+    void onEnterCubeCollectionMode(RobotStateMachineNode *context);
     void handleCubeCollectionJoystick(RobotStateMachineNode *context, const custom_interfaces::msg::JoystickIntent::SharedPtr msg);
     void handleCubeCollectionButton(RobotStateMachineNode *context, const custom_interfaces::msg::ButtonIntent::SharedPtr msg);
     void handleCubeCollectionTrigger(RobotStateMachineNode *context, const custom_interfaces::msg::TriggerIntent::SharedPtr msg);
     void updateCubeCollection(RobotStateMachineNode *context);
 
     // UnderBridge模式
+    void onEnterUnderBridgeMode(RobotStateMachineNode *context);
     void handleUnderBridgeJoystick(RobotStateMachineNode *context, const custom_interfaces::msg::JoystickIntent::SharedPtr msg);
     void handleUnderBridgeButton(RobotStateMachineNode *context, const custom_interfaces::msg::ButtonIntent::SharedPtr msg);
     void handleUnderBridgeTrigger(RobotStateMachineNode *context, const custom_interfaces::msg::TriggerIntent::SharedPtr msg);
@@ -123,4 +138,7 @@ private:
     void publishChassisCommand(RobotStateMachineNode *context, double x, double y, double speed_multiplier = 1.0);
     
     double speed_multiplier_ = 1.0;
+    
+    //包装好的统一底盘逻辑，根据当前模式和摇杆输入发布底盘命令
+    void processChassisControl(RobotStateMachineNode *context, double speed_scale = 1.0);
 };

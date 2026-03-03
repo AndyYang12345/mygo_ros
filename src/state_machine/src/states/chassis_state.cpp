@@ -2,6 +2,10 @@
 #include "state_machine/robot_state_machine_node.hpp"
 // @todo #include "custom_interfaces/msg/arm_command.hpp"  // 假设你需要自定义的机械臂命令
 
+namespace {
+constexpr bool kChassisDebugEnabled = true;
+}
+
 // ==================== 初始化函数指针表 ====================
 
 void ChassisState::initHandlerTables()
@@ -87,6 +91,7 @@ void ChassisState::onEnter(RobotStateMachineNode *context)
     RCLCPP_INFO(context->get_logger(), "Entered CHASSIS state");
     speed_multiplier_ = 1.0;
     arm_mode_ = ArmMode::Home;  // 默认进入Home模式
+    onArmModeEnter(context, arm_mode_);
 }
 
 void ChassisState::onExit(RobotStateMachineNode *context)
@@ -95,17 +100,6 @@ void ChassisState::onExit(RobotStateMachineNode *context)
     // 退出时停止所有运动
     context->getChassisCmdPub()->publish(geometry_msgs::msg::Twist());
     context->getArmCmdPub()->publish(geometry_msgs::msg::Twist());
-}
-
-void ChassisState::setArmMode(ArmMode mode)
-{
-    if (arm_mode_ != mode) {
-        RCLCPP_INFO(rclcpp::get_logger("ChassisState"), 
-                   "Switching arm mode from %d to %d", 
-                   static_cast<int>(arm_mode_), 
-                   static_cast<int>(mode));
-        arm_mode_ = mode;
-    }
 }
 
 // ==================== 统一的事件分发接口 ====================
@@ -168,19 +162,9 @@ void ChassisState::handleHomeJoystick(
     RobotStateMachineNode *context,
     const custom_interfaces::msg::JoystickIntent::SharedPtr msg)
 {
-    // Home模式下，摇杆控制底盘移动
-    if (msg->joystick_id == 0) {
-        const auto& joystick = context->getLeftJoystick();
-        if (!joystick.is_active(context)) {
-            context->getChassisCmdPub()->publish(geometry_msgs::msg::Twist());
-            return;
-        }
-        
-        double x = applyDeadzone(joystick.x, context->getJoystickDeadzone());
-        double y = applyDeadzone(joystick.y, context->getJoystickDeadzone());
-        
-        publishChassisCommand(context, x, y, speed_multiplier_);
-    }
+    (void)context;
+    (void)msg;
+    // @todo Home模式摇杆逻辑：根据需求决定是否允许底盘微动或仅允许原地保持。
 }
 
 void ChassisState::handleHomeButton(
@@ -190,7 +174,7 @@ void ChassisState::handleHomeButton(
     // 按下X键切换到NormalDetection模式
     if (msg->button_id == 2 && msg->event_type == 0) {
         RCLCPP_INFO(context->get_logger(), "Home: X pressed -> switching to NormalDetection");
-        setArmMode(ArmMode::NormalDetection);
+        setArmMode(context, ArmMode::NormalDetection);
     }
 }
 
@@ -236,11 +220,13 @@ void ChassisState::handleNormalDetectionJoystick(
         auto arm_twist = geometry_msgs::msg::Twist();
         arm_twist.angular.z = x * 0.5;  // yaw轴速度
         
-        // 假设你有机械臂命令发布者
+        // @todo 发布机械臂yaw控制命令（例如调用 context->getArmCmdPub()->publish(arm_twist)）。
         // context->getArmCmdPub()->publish(arm_twist);
         
-        RCLCPP_DEBUG(context->get_logger(), 
-                    "NormalDetection: Moving arm yaw: %.2f", x);
+        if (kChassisDebugEnabled) {
+            RCLCPP_DEBUG(context->get_logger(),
+                        "NormalDetection: Moving arm yaw: %.2f", x);
+        }
     }
 }
 
@@ -252,15 +238,15 @@ void ChassisState::handleNormalDetectionButton(
     
     switch(msg->button_id) {
         case 0:  // A键：切换到CubeCollection
-            setArmMode(ArmMode::CubeCollection);
+            setArmMode(context, ArmMode::CubeCollection);
             RCLCPP_INFO(context->get_logger(), "NormalDetection: Switching to CubeCollection");
             break;
         case 1:  // B键：切换到CylinderCollection
-            setArmMode(ArmMode::CylinderCollection);
+            setArmMode(context, ArmMode::CylinderCollection);
             RCLCPP_INFO(context->get_logger(), "NormalDetection: Switching to CylinderCollection");
             break;
         case 2:  // X键：返回Home
-            setArmMode(ArmMode::Home);
+            setArmMode(context, ArmMode::Home);
             RCLCPP_INFO(context->get_logger(), "NormalDetection: Returning to Home");
             break;
     }
@@ -270,17 +256,15 @@ void ChassisState::handleNormalDetectionTrigger(
     RobotStateMachineNode *context,
     const custom_interfaces::msg::TriggerIntent::SharedPtr msg)
 {
-    // LT/RT控制速度倍率（与Home模式相同）
-    if (msg->trigger_id == 0) {
-        speed_multiplier_ = 1.0 - msg->value * 0.5;
-    } else if (msg->trigger_id == 1) {
-        speed_multiplier_ = 1.0 + msg->value * 1.0;
-    }
+    (void)context;
+    (void)msg;
+    // @todo NormalDetection模式扳机逻辑：例如速度倍率、目标锁定或识别灵敏度调节。
 }
 
 void ChassisState::updateNormalDetection(RobotStateMachineNode *context)
 {
-    // 可以添加自动检测逻辑
+    processChassisControl(context);
+    // @todo 接入自动检测逻辑（如目标识别结果订阅、状态判定与任务触发）。
 }
 
 // ==================== CubeCollection模式实现 ====================
@@ -307,9 +291,10 @@ void ChassisState::handleCubeCollectionJoystick(
         
         if (y > 0) {
             RCLCPP_INFO(context->get_logger(), "CubeCollection: Adjusting gripper closer");
-            // 发送夹爪微调命令
+            // @todo 发送夹爪微调命令（闭合方向）。
         } else if (y < 0) {
             RCLCPP_INFO(context->get_logger(), "CubeCollection: Adjusting gripper opener");
+            // @todo 发送夹爪微调命令（张开方向）。
         }
     }
 }
@@ -323,10 +308,10 @@ void ChassisState::handleCubeCollectionButton(
     switch(msg->button_id) {
         case 0:  // A键：执行自动抓取
             RCLCPP_INFO(context->get_logger(), "CubeCollection: Executing auto grab");
-            // 触发自动抓取序列
+            // @todo 触发自动抓取序列（路径规划、夹爪控制、完成判定）。
             break;
         case 1:  // B键：取消，返回NormalDetection
-            setArmMode(ArmMode::NormalDetection);
+            setArmMode(context, ArmMode::NormalDetection);
             RCLCPP_INFO(context->get_logger(), "CubeCollection: Cancelled, returning to NormalDetection");
             break;
     }
@@ -339,11 +324,16 @@ void ChassisState::handleCubeCollectionTrigger(
     // 扳机控制夹爪开合
     if (msg->trigger_id == 0) {  // LT：张开
         double position = msg->value;  // 0-1
-        // 发送夹爪位置命令
-        RCLCPP_DEBUG(context->get_logger(), "CubeCollection: Gripper open: %.2f", position);
+        // @todo 发送夹爪开合位置命令（张开）。
+        if (kChassisDebugEnabled) {
+            RCLCPP_DEBUG(context->get_logger(), "CubeCollection: Gripper open: %.2f", position);
+        }
     } else if (msg->trigger_id == 1) {  // RT：闭合
         double position = 1.0 - msg->value;
-        RCLCPP_DEBUG(context->get_logger(), "CubeCollection: Gripper close: %.2f", position);
+        // @todo 发送夹爪开合位置命令（闭合）。
+        if (kChassisDebugEnabled) {
+            RCLCPP_DEBUG(context->get_logger(), "CubeCollection: Gripper close: %.2f", position);
+        }
     }
 }
 
@@ -352,7 +342,7 @@ void ChassisState::updateCubeCollection(RobotStateMachineNode *context)
     // 自动抓取逻辑的状态机
     static enum { SEARCHING, APPROACHING, GRASPING, RETREATING } auto_state = SEARCHING;
     
-    // 实现自动抓取的状态转换逻辑...
+    // @todo 实现自动抓取状态机转换逻辑（SEARCHING/APPROACHING/GRASPING/RETREATING）。
 }
 
 // ==================== 其他模式的简化实现 ====================
@@ -382,7 +372,8 @@ void ChassisState::handleCylinderCollectionTrigger(
 
 void ChassisState::updateCylinderCollection(RobotStateMachineNode *context)
 {
-    // 能量单元特定的自动抓取逻辑
+    processChassisControl(context, speed_multiplier_ * 0.5); // 抓取时速度减慢
+    // @todo 实现能量单元特定自动抓取逻辑。
 }
 
 // CylinderSubmission模式
@@ -390,7 +381,7 @@ void ChassisState::handleCylinderSubmissionJoystick(
     RobotStateMachineNode *context,
     const custom_interfaces::msg::JoystickIntent::SharedPtr msg)
 {
-    // 自动提交模式下，摇杆可能被禁用或只有部分功能
+    // @todo 自动提交模式摇杆逻辑：根据策略禁用或保留部分控制。
     (void)context;
     (void)msg;
 }
@@ -400,7 +391,7 @@ void ChassisState::handleCylinderSubmissionButton(
     const custom_interfaces::msg::ButtonIntent::SharedPtr msg)
 {
     if (msg->button_id == 1 && msg->event_type == 0) {  // B键取消
-        setArmMode(ArmMode::NormalDetection);
+        setArmMode(context, ArmMode::NormalDetection);
     }
 }
 
@@ -414,7 +405,8 @@ void ChassisState::handleCylinderSubmissionTrigger(
 
 void ChassisState::updateCylinderSubmission(RobotStateMachineNode *context)
 {
-    // 自动提交序列
+    processChassisControl(context, speed_multiplier_ * 0.5); // 提交时速度减慢
+    // @todo 实现能量单元自动提交序列。
 }
 
 // CubeSubmission模式
@@ -441,8 +433,9 @@ void ChassisState::handleCubeSubmissionTrigger(
 }
 
 void ChassisState::updateCubeSubmission(RobotStateMachineNode *context)
-{
-    // 方块自动提交序列
+{   
+    processChassisControl(context, speed_multiplier_ * 0.5); // 可按基础速度的50%对齐提交位置
+    // @todo 实现方块自动提交序列。
 }
 
 // UnderBridge模式
@@ -450,20 +443,8 @@ void ChassisState::handleUnderBridgeJoystick(
     RobotStateMachineNode *context,
     const custom_interfaces::msg::JoystickIntent::SharedPtr msg)
 {
-    if (msg->joystick_id == 0) {  // 左摇杆控制底盘
-        const auto& joystick = context->getLeftJoystick();
-        if (!joystick.is_active(context)) {
-            context->getChassisCmdPub()->publish(geometry_msgs::msg::Twist());
-            return;
-        }
-        
-        double x = applyDeadzone(joystick.x, context->getJoystickDeadzone());
-        double y = applyDeadzone(joystick.y, context->getJoystickDeadzone());
-        
-        // 过桥时可能限制速度
-        publishChassisCommand(context, x, y, speed_multiplier_ * 0.7);
-    }
-    // 右摇杆在过桥模式下可能被禁用，或者控制其他功能
+    processChassisControl(context, speed_multiplier_ * 0.7); // 过桥时速度减慢
+    // @todo 右摇杆过桥模式逻辑：明确禁用策略或定义功能映射。
 }
 
 void ChassisState::handleUnderBridgeButton(
@@ -471,7 +452,7 @@ void ChassisState::handleUnderBridgeButton(
     const custom_interfaces::msg::ButtonIntent::SharedPtr msg)
 {
     if (msg->button_id == 2 && msg->event_type == 0) {  // X键退出过桥模式
-        setArmMode(ArmMode::NormalDetection);
+        setArmMode(context, ArmMode::NormalDetection);
     }
 }
 
@@ -489,11 +470,147 @@ void ChassisState::handleUnderBridgeTrigger(
 
 void ChassisState::updateUnderBridge(RobotStateMachineNode *context)
 {
+    processChassisControl(context, speed_multiplier_ * 0.7);// 过桥速度为基础速度的70%
     // 确保机械臂保持在过桥高度
     static bool arm_position_set = false;
     if (!arm_position_set) {
         RCLCPP_INFO(context->get_logger(), "UnderBridge: Setting arm to bridge height");
-        // 发送机械臂过桥高度命令
+        // @todo 发送机械臂过桥高度命令并做执行结果校验。
         arm_position_set = true;
     }
+}
+
+void ChassisState::processChassisControl(RobotStateMachineNode *context, double speed_scale)
+{
+    const auto& joystick = context->getLeftJoystick();
+    
+    // 检查数据有效性
+    if (!joystick.is_active(context)) {
+        context->getChassisCmdPub()->publish(geometry_msgs::msg::Twist());
+        return;
+    }
+    
+    // 应用死区
+    double x = applyDeadzone(joystick.x, context->getJoystickDeadzone());
+    double y = applyDeadzone(joystick.y, context->getJoystickDeadzone());
+    
+    // 如果摇杆在中心，停止
+    if (x == 0.0 && y == 0.0) {
+        context->getChassisCmdPub()->publish(geometry_msgs::msg::Twist());
+        return;
+    }
+    
+    // 生成Twist消息
+    auto twist = geometry_msgs::msg::Twist();
+    twist.linear.x = y * context->getChassisMaxLinearSpeed() * speed_scale;
+    twist.angular.z = -x * context->getChassisMaxAngularSpeed() * speed_scale;
+    
+    // 发布命令
+    context->getChassisCmdPub()->publish(twist);
+    
+    if (kChassisDebugEnabled) {
+        RCLCPP_DEBUG(context->get_logger(),
+                    "Chassis cmd: linear=%.2f m/s, angular=%.2f rad/s (scale=%.2f)",
+                    twist.linear.x, twist.angular.z, speed_scale);
+    }
+}
+
+void ChassisState::setArmMode(RobotStateMachineNode *context, ArmMode new_mode)
+{
+    if (arm_mode_ == new_mode) return;
+    
+    ArmMode old_mode = arm_mode_;
+    
+    // // 1. 调用旧模式的退出回调
+    // onArmModeExit(context, old_mode);
+    
+    // 2. 更新模式
+    arm_mode_ = new_mode;
+    
+    // 3. 调用新模式的进入回调
+    onArmModeEnter(context, new_mode);
+}
+
+// 子模式生命周期管理
+void ChassisState::onArmModeEnter(RobotStateMachineNode *context, ArmMode new_mode)
+{
+    switch(new_mode) {
+        case ArmMode::Home:
+            onEnterHomeMode(context);
+            break;
+        case ArmMode::NormalDetection:
+            onEnterNormalDetectionMode(context);
+            break;
+        case ArmMode::CylinderSubmission:
+            onEnterCylinderSubmissionMode(context);
+            break;
+        case ArmMode::CubeSubmission:
+            onEnterCubeSubmissionMode(context);
+            break;
+        case ArmMode::CylinderCollection:
+            onEnterCylinderCollectionMode(context);
+            break;
+        case ArmMode::CubeCollection:
+            onEnterCubeCollectionMode(context);
+            break;
+        case ArmMode::UnderBridge:
+            onEnterUnderBridgeMode(context);
+            break;
+    }
+}
+
+void ChassisState::onEnterHomeMode(RobotStateMachineNode *context)
+{
+    if (kChassisDebugEnabled) {
+        RCLCPP_INFO(context->get_logger(), "[DEBUG] 进入Home模式");
+    }
+    // @todo 调整机械臂到Home折叠位姿并等待到位反馈。
+}
+
+void ChassisState::onEnterNormalDetectionMode(RobotStateMachineNode *context)
+{
+    if (kChassisDebugEnabled) {
+        RCLCPP_INFO(context->get_logger(), "[DEBUG] 进入NormalDetection模式");
+    }
+    // @todo 调整机械臂到正常检测位姿（启用yaw轴手动控制）。
+}
+
+void ChassisState::onEnterCylinderSubmissionMode(RobotStateMachineNode *context)
+{
+    if (kChassisDebugEnabled) {
+        RCLCPP_INFO(context->get_logger(), "[DEBUG] 进入CylinderSubmission模式");
+    }
+    // @todo 调整机械臂到能量单元提交预备位姿并初始化自动提交流程。
+}
+
+void ChassisState::onEnterCubeSubmissionMode(RobotStateMachineNode *context)
+{
+    if (kChassisDebugEnabled) {
+        RCLCPP_INFO(context->get_logger(), "[DEBUG] 进入CubeSubmission模式");
+    }
+    // @todo 调整机械臂到方块提交预备位姿并初始化自动提交流程。
+}
+
+void ChassisState::onEnterCylinderCollectionMode(RobotStateMachineNode *context)
+{
+    if (kChassisDebugEnabled) {
+        RCLCPP_INFO(context->get_logger(), "[DEBUG] 进入CylinderCollection模式");
+    }
+    // @todo 调整机械臂到能量单元抓取预备位姿并初始化抓取状态机。
+}
+
+void ChassisState::onEnterCubeCollectionMode(RobotStateMachineNode *context)
+{
+    if (kChassisDebugEnabled) {
+        RCLCPP_INFO(context->get_logger(), "[DEBUG] 进入CubeCollection模式");
+    }
+    // @todo 调整机械臂到方块抓取预备位姿并初始化抓取状态机。
+}
+
+void ChassisState::onEnterUnderBridgeMode(RobotStateMachineNode *context)
+{
+    if (kChassisDebugEnabled) {
+        RCLCPP_INFO(context->get_logger(), "[DEBUG] 进入UnderBridge模式");
+    }
+    // @todo 调整机械臂到过桥安全高度并锁定过桥期间的机械臂自由度。
 }
