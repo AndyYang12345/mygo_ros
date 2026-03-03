@@ -61,7 +61,7 @@ private:
         right_output = clamp(right_output, -1.0, 1.0);
 
         send_to_chassis_driver(left_output, right_output);
-        RCLCPP_INFO(this->get_logger(), "Processed chassis cmd: left=%.2f, right=%.2f", left_output, right_output);
+        RCLCPP_INFO(this->get_logger(), "Processed chassis cmd: left=%.3f, right=%.3f", left_output, right_output);
     }
 
     static double clamp(double value, double min_value, double max_value)
