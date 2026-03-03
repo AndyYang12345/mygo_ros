@@ -8,7 +8,9 @@
                 "/opt/ros/jazzy/include/**",
                 "/home/harekasa/mygo_ws/install/custom_interfaces/**",
                 "/home/harekasa/mygo_ws/install/joystick_parser/**",
-                "/home/harekasa/mygo_ws/src/state_machine/include/**"
+                "/home/harekasa/mygo_ws/src/state_machine/include/**",
+                "/home/harekasa/mygo_ws/src/robot_hardware_interfaces/include/**",
+                "/opt/ros/jazzy/include/geometry_msgs"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",

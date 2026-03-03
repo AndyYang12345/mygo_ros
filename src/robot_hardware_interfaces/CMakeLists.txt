@@ -20,6 +20,8 @@ set(targets
 
 add_executable(chassis_serial_node
   src/chassis_serial_node.cpp
+  src/send_command.cpp
+  src/serial_port.cpp
 )
 target_include_directories(chassis_serial_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -27,8 +29,12 @@ target_include_directories(chassis_serial_node PUBLIC
 target_compile_features(chassis_serial_node PUBLIC c_std_99 cxx_std_17)
 
 
-install(TARGETS targets
+install(TARGETS chassis_serial_node
   DESTINATION lib/${PROJECT_NAME}
+)
+
+install(DIRECTORY include/
+  DESTINATION include
 )
 
 ament_target_dependencies(chassis_serial_node
