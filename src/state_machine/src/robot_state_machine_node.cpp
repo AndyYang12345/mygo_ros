@@ -7,6 +7,8 @@
 #include "state_machine/emergency_state.hpp"
 #include "state_machine/idle_state.hpp"
 #include "state_machine/menu_state.hpp"
+#include "state_machine/pole_state.hpp"
+#include "state_machine/vision_task_state.hpp"
 
 using namespace std::chrono_literals;
 
@@ -19,7 +21,9 @@ RobotStateMachineNode::RobotStateMachineNode()
     states_[2] = std::make_shared<ChassisState>();
     states_[3] = std::make_shared<ArmState>();
     states_[4] = std::make_shared<MenuState>();
+    states_[5] = std::make_shared<PoleState>();
     states_[6] = std::make_shared<EmergencyState>();
+    states_[7] = std::make_shared<VisionTaskState>();
 
     current_state_ = states_[1].get();
 
@@ -57,6 +61,11 @@ void RobotStateMachineNode::changeState(uint8_t state_enum)
         state_before_menu_ = current_state_->getStateEnum();
     }
 
+    if (state_enum == 6 && current_state_ != nullptr && current_state_->getStateEnum() != 6)
+    {
+        state_before_emergency_ = current_state_->getStateEnum();
+    }
+
     if (!isTransitionAllowed(current_state_->getStateEnum(), state_enum))
     {
         RCLCPP_WARN(
@@ -84,6 +93,11 @@ void RobotStateMachineNode::changeState(uint8_t state_enum)
 uint8_t RobotStateMachineNode::getStateBeforeMenu() const
 {
     return state_before_menu_;
+}
+
+uint8_t RobotStateMachineNode::getStateBeforeEmergency() const
+{
+    return state_before_emergency_;
 }
 
 rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr RobotStateMachineNode::getChassisCmdPub()
@@ -162,6 +176,21 @@ int RobotStateMachineNode::getMenuSelection() const
     return menu_selection_;
 }
 
+bool RobotStateMachineNode::consumeVisionTaskDone()
+{
+    if (!vision_task_done_)
+    {
+        return false;
+    }
+    vision_task_done_ = false;
+    return true;
+}
+
+bool RobotStateMachineNode::isVisionTaskDone() const
+{
+    return vision_task_done_;
+}
+
 void RobotStateMachineNode::declareParameters()
 {
     this->declare_parameter<double>("chassis.max_linear_speed", 0.5);
@@ -194,6 +223,13 @@ void RobotStateMachineNode::setupSubscribers()
         "button_intent", 10,
         [this](const custom_interfaces::msg::ButtonIntent::SharedPtr msg)
         {
+            const bool home_pressed = (msg->button_id == 8) && (msg->event_type == 0);
+            if (home_pressed && current_state_ && current_state_->getStateEnum() != 6)
+            {
+                this->changeState(6);
+                return;
+            }
+
             if (current_state_)
             {
                 current_state_->handleButton(this, msg);
@@ -230,7 +266,8 @@ void RobotStateMachineNode::setupSubscribers()
             const bool lt_pressed =
                 (msg->trigger_id == 0) && (msg->event_type == 1 || msg->value < -0.1F);
 
-            if (lt_pressed && current_state_ && current_state_->getStateEnum() != 4)
+            if (lt_pressed && current_state_ && current_state_->getStateEnum() != 4
+                && current_state_->getStateEnum() != 6)
             {
                 RCLCPP_INFO(this->get_logger(), "LT pressed -> switching to MENU");
                 this->changeState(4);
@@ -252,6 +289,38 @@ void RobotStateMachineNode::setupSubscribers()
                 current_state_->handleCombo(this, msg);
             }
         });
+
+    vision_task_done_sub_ = this->create_subscription<std_msgs::msg::Bool>(
+        "/vision/task_done", 10,
+        [this](const std_msgs::msg::Bool::SharedPtr msg)
+        {
+            if (msg->data)
+            {
+                vision_task_done_ = true;
+                RCLCPP_INFO(this->get_logger(), "Received /vision/task_done=true");
+            }
+        });
+
+    set_mode_service_ = this->create_service<custom_interfaces::srv::SetMode>(
+        "/robot/set_mode",
+        [this](
+            const custom_interfaces::srv::SetMode::Request::SharedPtr request,
+            custom_interfaces::srv::SetMode::Response::SharedPtr response)
+        {
+            const auto target_state = mapSetModeToState(request->target_mode);
+            if (states_.find(target_state) == states_.end())
+            {
+                response->success = false;
+                response->message = "Unsupported target_mode";
+                response->timestamp = this->now();
+                return;
+            }
+
+            this->changeState(target_state);
+            response->success = (current_state_ && current_state_->getStateEnum() == target_state);
+            response->message = response->success ? "mode changed" : "transition rejected";
+            response->timestamp = this->now();
+        });
 }
 
 void RobotStateMachineNode::setupTimers()
@@ -271,26 +340,76 @@ void RobotStateMachineNode::setupTimers()
 
 bool RobotStateMachineNode::isTransitionAllowed(uint8_t from, uint8_t to)
 {
+    if (from == to)
+    {
+        return true;
+    }
+
     if (from == 6)
     {
-        return to == 1;
+        return to == state_before_emergency_ || to == 1;
     }
+
     if (to == 6)
     {
         return true;
     }
-    return true;
+
+    if (from == 1)
+    {
+        return to == 4;
+    }
+
+    if (from == 4)
+    {
+        return to == 1 || to == 2 || to == 3 || to == 5 || to == 6 || to == 7;
+    }
+
+    if (from == 2 || from == 3 || from == 5 || from == 7)
+    {
+        return to == 4;
+    }
+
+    return false;
 }
 
 void RobotStateMachineNode::publishState()
 {
     auto msg = custom_interfaces::msg::RobotState();
     msg.main_state = current_state_->getStateEnum();
+    msg.sub_state = current_state_->getSubState();
     msg.state_name = current_state_->getName();
+    msg.available_modes = current_state_->getAvailableModes();
     msg.menu_items = menu_items_;
     msg.menu_selection = static_cast<uint8_t>(menu_selection_);
+    msg.health_status = 0;
+    msg.error_message = "";
+    msg.flags = 0;
     msg.timestamp = this->now();
     state_pub_->publish(msg);
+}
+
+uint8_t RobotStateMachineNode::mapSetModeToState(uint8_t target_mode) const
+{
+    switch (target_mode)
+    {
+        case 0:
+            return 1;  // IDLE
+        case 1:
+            return 2;  // CHASSIS
+        case 2:
+            return 3;  // ARM
+        case 3:
+            return 4;  // MENU
+        case 4:
+            return 5;  // POLE
+        case 5:
+            return 7;  // VISION TASK
+        case 6:
+            return 6;  // EMERGENCY
+        default:
+            return 0;
+    }
 }
 
 void RobotStateMachineNode::sendStopCommands()

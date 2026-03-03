@@ -3,6 +3,7 @@
 #include "state_machine/robot_state.hpp"
 #include <array>
 #include <functional>
+#include <vector>
 
 class ChassisState : public RobotState
 {
@@ -10,6 +11,8 @@ public:
     ChassisState();
     std::string getName() const override;
     uint8_t getStateEnum() const override;
+    uint8_t getSubState() const override;
+    std::vector<std::string> getAvailableModes() const override;
 
     void onEnter(RobotStateMachineNode *context) override;
     void onExit(RobotStateMachineNode *context) override;
@@ -35,7 +38,8 @@ public:
         CubeSubmission,     // 自动提交方块                                          手动选择
         CylinderCollection, // 自动用机械臂夹取能量单元                                特殊进入
         CubeCollection,     // 自动用机械臂夹取方块                                   特殊进入
-        UnderBridge         // 过桥模式，底盘行进用左摇杆控制，机械臂保持在过桥高度         手动选择
+        UnderBridge,        // 过桥模式，底盘行进用左摇杆控制，机械臂保持在过桥高度         手动选择
+        BallSubmission      // 球提交
     };
     // 获取和设置当前机械臂模式
     ArmMode getArmMode() const { return arm_mode_; }
@@ -76,8 +80,13 @@ private:
     void initHandlerTables();
 
     // 函数指针表数组（大小等于ArmMode枚举的数量）
-    static constexpr size_t ARM_MODE_COUNT = 7;  // Home(0)到UnderBridge(6)共7个
+    static constexpr size_t ARM_MODE_COUNT = 8;
     std::array<HandlerTable, ARM_MODE_COUNT> handler_tables_;
+
+    bool submenu_active_ = false;
+    bool submenu_latched_ = false;
+    int submenu_selection_ = 0;
+    std::vector<ArmMode> submenu_modes_;
 
     // ==================== 各模式的实现函数声明 ====================
     
@@ -133,6 +142,13 @@ private:
     void handleUnderBridgeTrigger(RobotStateMachineNode *context, const custom_interfaces::msg::TriggerIntent::SharedPtr msg);
     void updateUnderBridge(RobotStateMachineNode *context);
 
+    // BallSubmission模式
+    void onEnterBallSubmissionMode(RobotStateMachineNode *context);
+    void handleBallSubmissionJoystick(RobotStateMachineNode *context, const custom_interfaces::msg::JoystickIntent::SharedPtr msg);
+    void handleBallSubmissionButton(RobotStateMachineNode *context, const custom_interfaces::msg::ButtonIntent::SharedPtr msg);
+    void handleBallSubmissionTrigger(RobotStateMachineNode *context, const custom_interfaces::msg::TriggerIntent::SharedPtr msg);
+    void updateBallSubmission(RobotStateMachineNode *context);
+
     // 辅助函数
     double applyDeadzone(double value, double deadzone) const;
     void publishChassisCommand(RobotStateMachineNode *context, double x, double y, double speed_multiplier = 1.0);
@@ -141,4 +157,8 @@ private:
     
     //包装好的统一底盘逻辑，根据当前模式和摇杆输入发布底盘命令
     void processChassisControl(RobotStateMachineNode *context, double speed_scale = 1.0);
+
+    std::string armModeName(ArmMode mode) const;
+    void updateSubmenuUi(RobotStateMachineNode *context);
+    int angleToOctant(float x, float y) const;
 };

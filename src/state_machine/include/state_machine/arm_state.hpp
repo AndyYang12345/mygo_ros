@@ -18,5 +18,8 @@ public:
   void handleTrigger(
     RobotStateMachineNode * context,
     const custom_interfaces::msg::TriggerIntent::SharedPtr msg) override;
+  void handleCombo(
+    RobotStateMachineNode * context,
+    const custom_interfaces::msg::ComboIntent::SharedPtr msg) override;
   void update(RobotStateMachineNode * context) override;
 };

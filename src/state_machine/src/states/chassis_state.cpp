@@ -4,6 +4,7 @@
 
 namespace {
 constexpr bool kChassisDebugEnabled = true;
+constexpr float kPi = 3.14159265358979323846F;
 }
 
 // ==================== 初始化函数指针表 ====================
@@ -65,6 +66,14 @@ void ChassisState::initHandlerTables()
         .trigger = &ChassisState::handleUnderBridgeTrigger,
         .update = &ChassisState::updateUnderBridge
     };
+
+    // BallSubmission模式
+    handler_tables_[7] = {
+        .joystick = &ChassisState::handleBallSubmissionJoystick,
+        .button = &ChassisState::handleBallSubmissionButton,
+        .trigger = &ChassisState::handleBallSubmissionTrigger,
+        .update = &ChassisState::updateBallSubmission
+    };
 }
 
 // ==================== 构造函数 ====================
@@ -72,6 +81,16 @@ void ChassisState::initHandlerTables()
 ChassisState::ChassisState()
 {
     initHandlerTables();
+    submenu_modes_ = {
+        ArmMode::Home,
+        ArmMode::NormalDetection,
+        ArmMode::CylinderSubmission,
+        ArmMode::CubeSubmission,
+        ArmMode::CylinderCollection,
+        ArmMode::CubeCollection,
+        ArmMode::UnderBridge,
+        ArmMode::BallSubmission,
+    };
 }
 
 // ==================== 基本接口实现 ====================
@@ -86,11 +105,31 @@ uint8_t ChassisState::getStateEnum() const
     return 2;
 }
 
+uint8_t ChassisState::getSubState() const
+{
+    return static_cast<uint8_t>(arm_mode_);
+}
+
+std::vector<std::string> ChassisState::getAvailableModes() const
+{
+    std::vector<std::string> modes;
+    modes.reserve(submenu_modes_.size());
+    for (const auto mode : submenu_modes_)
+    {
+        modes.push_back(armModeName(mode));
+    }
+    return modes;
+}
+
 void ChassisState::onEnter(RobotStateMachineNode *context)
 {
     RCLCPP_INFO(context->get_logger(), "Entered CHASSIS state");
     speed_multiplier_ = 1.0;
     arm_mode_ = ArmMode::Home;  // 默认进入Home模式
+    submenu_active_ = false;
+    submenu_latched_ = false;
+    submenu_selection_ = 0;
+    updateSubmenuUi(context);
     onArmModeEnter(context, arm_mode_);
 }
 
@@ -108,6 +147,46 @@ void ChassisState::handleJoystick(
     RobotStateMachineNode *context,
     const custom_interfaces::msg::JoystickIntent::SharedPtr msg)
 {
+    if (submenu_active_ && msg->joystick_id == 1)
+    {
+        const float x = msg->x;
+        const float y = msg->y;
+        const float deadzone = 0.25F;
+        const float radius = std::sqrt(x * x + y * y);
+
+        if (radius < deadzone)
+        {
+            RCLCPP_INFO_THROTTLE(
+                context->get_logger(), *context->get_clock(), 200,
+                "[CHASSIS_SUBMENU] joystick centered (x=%.2f, y=%.2f), keep index=%d, mode=%s",
+                x, y, submenu_selection_, armModeName(submenu_modes_[submenu_selection_]).c_str());
+            return;
+        }
+
+        const int octant = angleToOctant(x, y);
+        if (octant != submenu_selection_)
+        {
+            submenu_selection_ = octant;
+            updateSubmenuUi(context);
+            RCLCPP_INFO(
+                context->get_logger(),
+                "[CHASSIS_SUBMENU] octant=%d -> index=%d, mode=%s",
+                octant,
+                submenu_selection_,
+                armModeName(submenu_modes_[submenu_selection_]).c_str());
+        }
+        else
+        {
+            RCLCPP_INFO_THROTTLE(
+                context->get_logger(), *context->get_clock(), 150,
+                "[CHASSIS_SUBMENU] octant=%d, index=%d, mode=%s",
+                octant,
+                submenu_selection_,
+                armModeName(submenu_modes_[submenu_selection_]).c_str());
+        }
+        return;
+    }
+
     size_t index = static_cast<size_t>(arm_mode_);
     auto handler = handler_tables_[index].joystick;
     (this->*handler)(context, msg);
@@ -117,6 +196,45 @@ void ChassisState::handleButton(
     RobotStateMachineNode *context,
     const custom_interfaces::msg::ButtonIntent::SharedPtr msg)
 {
+    if (msg->button_id == 4)
+    {
+        if (msg->event_type == 0)
+        {
+            submenu_active_ = true;
+            submenu_latched_ = false;
+            for (size_t i = 0; i < submenu_modes_.size(); ++i)
+            {
+                if (submenu_modes_[i] == arm_mode_)
+                {
+                    submenu_selection_ = static_cast<int>(i);
+                    break;
+                }
+            }
+            updateSubmenuUi(context);
+            return;
+        }
+
+        if (msg->event_type == 1 && submenu_active_)
+        {
+            submenu_active_ = false;
+            submenu_latched_ = false;
+            setArmMode(context, submenu_modes_[submenu_selection_]);
+            updateSubmenuUi(context);
+            return;
+        }
+    }
+
+    if (submenu_active_)
+    {
+        if (msg->button_id == 1 && msg->event_type == 0)
+        {
+            submenu_active_ = false;
+            submenu_latched_ = false;
+            updateSubmenuUi(context);
+        }
+        return;
+    }
+
     size_t index = static_cast<size_t>(arm_mode_);
     auto handler = handler_tables_[index].button;
     (this->*handler)(context, msg);
@@ -162,19 +280,35 @@ void ChassisState::handleHomeJoystick(
     RobotStateMachineNode *context,
     const custom_interfaces::msg::JoystickIntent::SharedPtr msg)
 {
-    (void)context;
-    (void)msg;
-    // @todo Home模式摇杆逻辑：根据需求决定是否允许底盘微动或仅允许原地保持。
+    if (msg->joystick_id == 0)
+    {
+        processChassisControl(context, speed_multiplier_);
+    }
 }
 
 void ChassisState::handleHomeButton(
     RobotStateMachineNode *context,
     const custom_interfaces::msg::ButtonIntent::SharedPtr msg)
 {
-    // 按下X键切换到NormalDetection模式
-    if (msg->button_id == 2 && msg->event_type == 0) {
-        RCLCPP_INFO(context->get_logger(), "Home: X pressed -> switching to NormalDetection");
+    if (msg->event_type != 0)
+    {
+        return;
+    }
+
+    if (msg->button_id == 2)
+    {
+        RCLCPP_INFO(context->get_logger(), "Home: X pressed -> NormalDetection");
         setArmMode(context, ArmMode::NormalDetection);
+    }
+    else if (msg->button_id == 0)
+    {
+        RCLCPP_INFO(context->get_logger(), "Home: A pressed -> CylinderSubmission");
+        setArmMode(context, ArmMode::CylinderSubmission);
+    }
+    else if (msg->button_id == 3)
+    {
+        RCLCPP_INFO(context->get_logger(), "Home: Y pressed -> CubeSubmission");
+        setArmMode(context, ArmMode::CubeSubmission);
     }
 }
 
@@ -311,8 +445,8 @@ void ChassisState::handleCubeCollectionButton(
             // @todo 触发自动抓取序列（路径规划、夹爪控制、完成判定）。
             break;
         case 1:  // B键：取消，返回NormalDetection
-            setArmMode(context, ArmMode::NormalDetection);
-            RCLCPP_INFO(context->get_logger(), "CubeCollection: Cancelled, returning to NormalDetection");
+            setArmMode(context, ArmMode::Home);
+            RCLCPP_INFO(context->get_logger(), "CubeCollection: Cancelled, returning to HOME");
             break;
     }
 }
@@ -391,7 +525,7 @@ void ChassisState::handleCylinderSubmissionButton(
     const custom_interfaces::msg::ButtonIntent::SharedPtr msg)
 {
     if (msg->button_id == 1 && msg->event_type == 0) {  // B键取消
-        setArmMode(context, ArmMode::NormalDetection);
+        setArmMode(context, ArmMode::Home);
     }
 }
 
@@ -451,8 +585,8 @@ void ChassisState::handleUnderBridgeButton(
     RobotStateMachineNode *context,
     const custom_interfaces::msg::ButtonIntent::SharedPtr msg)
 {
-    if (msg->button_id == 2 && msg->event_type == 0) {  // X键退出过桥模式
-        setArmMode(context, ArmMode::NormalDetection);
+    if (msg->button_id == 1 && msg->event_type == 0) {  // B键返回Home
+        setArmMode(context, ArmMode::Home);
     }
 }
 
@@ -478,6 +612,54 @@ void ChassisState::updateUnderBridge(RobotStateMachineNode *context)
         // @todo 发送机械臂过桥高度命令并做执行结果校验。
         arm_position_set = true;
     }
+}
+
+void ChassisState::handleBallSubmissionJoystick(
+    RobotStateMachineNode *context,
+    const custom_interfaces::msg::JoystickIntent::SharedPtr msg)
+{
+    if (msg->joystick_id == 0)
+    {
+        processChassisControl(context, speed_multiplier_ * 0.5);
+    }
+}
+
+void ChassisState::handleBallSubmissionButton(
+    RobotStateMachineNode *context,
+    const custom_interfaces::msg::ButtonIntent::SharedPtr msg)
+{
+    if (msg->event_type != 0)
+    {
+        return;
+    }
+
+    if (msg->button_id == 0)
+    {
+        auto preset = std_msgs::msg::Int32();
+        preset.data = 80;
+        context->getPresetPub()->publish(preset);
+    }
+    else if (msg->button_id == 1)
+    {
+        setArmMode(context, ArmMode::Home);
+    }
+}
+
+void ChassisState::handleBallSubmissionTrigger(
+    RobotStateMachineNode *context,
+    const custom_interfaces::msg::TriggerIntent::SharedPtr msg)
+{
+    if (msg->trigger_id == 0 && msg->value < -0.8F)
+    {
+        auto preset = std_msgs::msg::Int32();
+        preset.data = 81;
+        context->getPresetPub()->publish(preset);
+    }
+}
+
+void ChassisState::updateBallSubmission(RobotStateMachineNode *context)
+{
+    processChassisControl(context, speed_multiplier_ * 0.5);
 }
 
 void ChassisState::processChassisControl(RobotStateMachineNode *context, double speed_scale)
@@ -556,6 +738,9 @@ void ChassisState::onArmModeEnter(RobotStateMachineNode *context, ArmMode new_mo
         case ArmMode::UnderBridge:
             onEnterUnderBridgeMode(context);
             break;
+        case ArmMode::BallSubmission:
+            onEnterBallSubmissionMode(context);
+            break;
     }
 }
 
@@ -613,4 +798,80 @@ void ChassisState::onEnterUnderBridgeMode(RobotStateMachineNode *context)
         RCLCPP_INFO(context->get_logger(), "[DEBUG] 进入UnderBridge模式");
     }
     // @todo 调整机械臂到过桥安全高度并锁定过桥期间的机械臂自由度。
+}
+
+void ChassisState::onEnterBallSubmissionMode(RobotStateMachineNode *context)
+{
+    if (kChassisDebugEnabled) {
+        RCLCPP_INFO(context->get_logger(), "[DEBUG] 进入BallSubmission模式");
+    }
+}
+
+std::string ChassisState::armModeName(ArmMode mode) const
+{
+    switch (mode)
+    {
+        case ArmMode::Home:
+            return "HOME";
+        case ArmMode::NormalDetection:
+            return "NORMAL_DETECTION";
+        case ArmMode::CylinderSubmission:
+            return "CYLINDER_SUBMISSION";
+        case ArmMode::CubeSubmission:
+            return "CUBE_SUBMISSION";
+        case ArmMode::CylinderCollection:
+            return "CYLINDER_COLLECTION";
+        case ArmMode::CubeCollection:
+            return "CUBE_COLLECTION";
+        case ArmMode::UnderBridge:
+            return "UNDER_BRIDGE";
+        case ArmMode::BallSubmission:
+            return "BALL_SUBMISSION";
+    }
+    return "UNKNOWN";
+}
+
+void ChassisState::updateSubmenuUi(RobotStateMachineNode *context)
+{
+    std::vector<std::string> names;
+    names.reserve(submenu_modes_.size());
+    for (const auto mode : submenu_modes_)
+    {
+        names.push_back(armModeName(mode));
+    }
+
+    context->setMenuItems(names);
+
+    if (submenu_active_)
+    {
+        context->setMenuSelection(submenu_selection_);
+        return;
+    }
+
+    for (size_t i = 0; i < submenu_modes_.size(); ++i)
+    {
+        if (submenu_modes_[i] == arm_mode_)
+        {
+            context->setMenuSelection(static_cast<int>(i));
+            return;
+        }
+    }
+    context->setMenuSelection(0);
+}
+
+int ChassisState::angleToOctant(float x, float y) const
+{
+    const float norm_x = -x;
+    const float norm_y = y;
+
+    float angle = std::atan2(norm_y, norm_x);
+    if (angle < 0.0F)
+    {
+        angle += 2.0F * kPi;
+    }
+
+    const float sector = (2.0F * kPi) / 8.0F;
+    int octant = static_cast<int>(std::floor((angle + sector * 0.5F) / sector));
+    octant %= 8;
+    return octant;
 }

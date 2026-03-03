@@ -46,6 +46,7 @@ private:
     {
         publish_joystick(0, get_axis(0), get_axis(1));  // 发布左摇杆状态
         publish_joystick(1, get_axis(3), get_axis(4));  // 发布右摇杆状态
+        publish_joystick(2, get_axis(6), get_axis(7));  // 发布十字键状态
         publish_trigger(0);  // 发布LT状态
         publish_trigger(1);  // 发布RT状态
     }
@@ -102,7 +103,7 @@ private:
         intent_msg.value = get_axis(id == 0 ? 2 : 5);  // LT使用轴2，RT使用轴5
         if (intent_msg.value > 0.95F) {
             intent_msg.event_type = 0;  // RELEASED
-        } else if (abs(intent_msg.value) < -0.95) {
+        } else if (intent_msg.value < -0.95F) {
             intent_msg.event_type = 1;  // FULLY_PRESSED
         } else {
             intent_msg.event_type = 2;  // PRESSED

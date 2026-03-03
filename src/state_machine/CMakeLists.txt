@@ -20,6 +20,8 @@ add_executable(state_machine
   src/states/chassis_state.cpp
   src/states/arm_state.cpp
   src/states/menu_state.cpp
+  src/states/pole_state.cpp
+  src/states/vision_task_state.cpp
   src/states/emergency_state.cpp
 )
 target_include_directories(state_machine PUBLIC

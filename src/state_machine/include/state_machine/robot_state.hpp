@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "custom_interfaces/msg/button_intent.hpp"
 #include "custom_interfaces/msg/combo_intent.hpp"
@@ -22,6 +23,8 @@ public:
 
   virtual std::string getName() const = 0;
   virtual uint8_t getStateEnum() const = 0;
+  virtual uint8_t getSubState() const { return 0; }
+  virtual std::vector<std::string> getAvailableModes() const { return {}; }
 
   virtual void onEnter(RobotStateMachineNode * context) {}
   virtual void onExit(RobotStateMachineNode * context) {}

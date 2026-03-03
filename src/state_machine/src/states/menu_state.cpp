@@ -1,139 +1,193 @@
 #include "state_machine/menu_state.hpp"
 
-#include <cmath>
+#include "state_machine/robot_state_machine_node.hpp"
 
+namespace {
+constexpr float kPi = 3.14159265358979323846F;
+const char *kOctantNames[8] = {
+    "RIGHT", "UP_RIGHT", "UP", "UP_LEFT", "LEFT", "DOWN_LEFT", "DOWN", "DOWN_RIGHT"};
+}
 
-#include "std_msgs/msg/int32.hpp"
+std::vector<std::string> MenuState::getAvailableModes() const
+{
+    std::vector<std::string> names;
+    names.reserve(menu_entries_.size());
+    for (const auto &entry : menu_entries_)
+    {
+        names.push_back(entry.first);
+    }
+    return names;
+}
 
-void MenuState::onEnter(RobotStateMachineNode *context) {
-    RCLCPP_INFO(context->get_logger(), "Entered MENU mode - Press LT to show menu, release to select");
-    
-    // 重置状态
-    current_selection_ = MenuDirection::NONE;
-    trigger_state_.is_pressed = false;
-    trigger_state_.selection_made = false;
-    joystick_state_.was_centered = true;
+void MenuState::onEnter(RobotStateMachineNode *context)
+{
+    trigger_pressed_ = false;
+    selection_index_ = 0;
     last_activity_ = context->now();
-    
-    // 通知GUI显示圆盘菜单（通过状态广播）
-    // GUI订阅/robot/state，当state=4且sub_state=0时显示圆盘
+    refreshMenuState(context);
+    RCLCPP_INFO(context->get_logger(), "Entered MENU mode");
 }
 
-void MenuState::onExit(RobotStateMachineNode* context) {
-    RCLCPP_INFO(context->get_logger(), "Exited MENU mode");
-    // 通知GUI隐藏圆盘菜单
+void MenuState::onExit(RobotStateMachineNode *context)
+{
+    (void)context;
 }
 
-void MenuState::handleTrigger(RobotStateMachineNode* context,
-                              const custom_interfaces::msg::TriggerIntent::SharedPtr msg) {
-    // 只处理左扳机（trigger_id = 0）
-    if (msg->trigger_id != 0) return;
-    
-    bool current_pressed = (msg->value < -0.1);  // 按压阈值（1=松开，-1=按下）
-    
-    // 检测扳机按下事件
-    if (current_pressed && !trigger_state_.is_pressed) {
-        // 扳机按下：显示菜单，重置选择状态
-        trigger_state_.is_pressed = true;
-        trigger_state_.selection_made = false;
-        current_selection_ = MenuDirection::NONE;
-        
-        RCLCPP_INFO(context->get_logger(), "LT pressed - Menu activated, move joystick to select");
-        
-        // 通知GUI显示圆盘（可以通过状态广播的子状态实现）
-        // 可以在RobotState中添加sub_state字段
+void MenuState::handleTrigger(
+    RobotStateMachineNode *context,
+    const custom_interfaces::msg::TriggerIntent::SharedPtr msg)
+{
+    if (msg->trigger_id != 0)
+    {
+        return;
     }
-    
-    // 检测扳机释放事件
-    if (!current_pressed && trigger_state_.is_pressed) {
-        // 扳机释放：确认当前选中的选项
-        trigger_state_.is_pressed = false;
-        
-        if (!trigger_state_.selection_made && current_selection_ != MenuDirection::NONE) {
-            // 有选中项，执行对应功能
-            executeSelectedFunction(context, current_selection_);
-            trigger_state_.selection_made = true;
-            return;
-        } else {
-            RCLCPP_INFO(context->get_logger(), "LT released - No selection, returning to previous mode");
-        }
-        
-        // 未选择菜单项时，释放扳机后返回进入菜单前的模式
+
+    const bool currently_pressed = (msg->value < -0.15F) || (msg->event_type == 1);
+
+    if (currently_pressed && !trigger_pressed_)
+    {
+        trigger_pressed_ = true;
+        last_activity_ = context->now();
+        return;
+    }
+
+    if (!currently_pressed && trigger_pressed_)
+    {
+        trigger_pressed_ = false;
+        const uint8_t target_state = menu_entries_[selection_index_].second;
+        context->changeState(target_state);
+    }
+}
+
+void MenuState::handleJoystick(
+    RobotStateMachineNode *context,
+    const custom_interfaces::msg::JoystickIntent::SharedPtr msg)
+{
+    if (msg->joystick_id != 1 || !trigger_pressed_)
+    {
+        return;
+    }
+
+    const float x = msg->x;
+    const float y = msg->y;
+    const float deadzone = 0.25F;
+    const float radius = std::sqrt(x * x + y * y);
+
+    if (radius < deadzone)
+    {
+        RCLCPP_INFO_THROTTLE(
+            context->get_logger(), *context->get_clock(), 200,
+            "[MENU] joystick centered (x=%.2f, y=%.2f), keep index=%d, item=%s",
+            x, y, selection_index_, menu_entries_[selection_index_].first.c_str());
+        return;
+    }
+
+    const int octant = angleToOctant(x, y);
+    const int new_index = octantToMenuIndex(octant);
+    const float norm_x = -x;
+    const float norm_y = y;
+    const float angle_rad = std::atan2(norm_y, norm_x);
+    const float angle_deg = angle_rad * 180.0F / kPi;
+
+    if (new_index != selection_index_)
+    {
+        selection_index_ = new_index;
+        last_activity_ = context->now();
+        refreshMenuState(context);
+        RCLCPP_INFO(
+            context->get_logger(),
+            "[MENU] angle=%.1f deg, octant=%s -> index=%d, item=%s",
+            angle_deg,
+            kOctantNames[octant],
+            selection_index_,
+            menu_entries_[selection_index_].first.c_str());
+    }
+    else
+    {
+        RCLCPP_INFO_THROTTLE(
+            context->get_logger(), *context->get_clock(), 150,
+            "[MENU] angle=%.1f deg, octant=%s, index=%d, item=%s",
+            angle_deg,
+            kOctantNames[octant],
+            selection_index_,
+            menu_entries_[selection_index_].first.c_str());
+    }
+}
+
+void MenuState::handleButton(
+    RobotStateMachineNode *context,
+    const custom_interfaces::msg::ButtonIntent::SharedPtr msg)
+{
+    if (msg->event_type != 0)
+    {
+        return;
+    }
+
+    if (msg->button_id == 1)
+    {
         context->changeState(context->getStateBeforeMenu());
     }
 }
 
-void MenuState::handleJoystick(RobotStateMachineNode* context,
-                               const custom_interfaces::msg::JoystickIntent::SharedPtr msg) {
-    // 只处理左摇杆
-    if (msg->joystick_id != 1) return;
-    
-    // 只有扳机按下时才处理摇杆选择
-    if (!trigger_state_.is_pressed) return;
-    
-    float x = msg->x;
-    float y = msg->y;
-    
-    // 转换为方向
-    MenuDirection new_direction = joystickToDirection(x, y);
-    
-    // 检测是否刚从中心移出
-    bool is_centered = (new_direction == MenuDirection::NONE);
-    
-    if (joystick_state_.was_centered && !is_centered) {
-        // 摇杆刚离开中心，选中新方向
-        current_selection_ = new_direction;
-        last_activity_ = context->now();
-        RCLCPP_INFO(context->get_logger(), "Selected: %s -> %s", 
-                   direction_names_[static_cast<int>(current_selection_)].c_str(),
-                   getFunctionForDirection(current_selection_).c_str());
-        
-        // 通知GUI更新高亮显示
+void MenuState::update(RobotStateMachineNode *context)
+{
+    if (!trigger_pressed_)
+    {
+        return;
     }
-    else if (!joystick_state_.was_centered && !is_centered) {
-        // 摇杆持续在某个方向，检测是否改变了方向
-        if (new_direction != current_selection_ && new_direction != MenuDirection::NONE) {
-            current_selection_ = new_direction;
-            last_activity_ = context->now();
-            RCLCPP_INFO(context->get_logger(), "Changed to: %s -> %s", 
-                       direction_names_[static_cast<int>(current_selection_)].c_str(),
-                       getFunctionForDirection(current_selection_).c_str());
-            
-            // 通知GUI更新高亮显示
-        }
-    }
-    else if (!joystick_state_.was_centered && is_centered) {
-        // 摇杆回中，清除选中（但不退出，等待扳机释放）
-        if (current_selection_ != MenuDirection::NONE) {
-            RCLCPP_INFO(context->get_logger(), "Joystick centered - selection cleared");
-            current_selection_ = MenuDirection::NONE;
-            last_activity_ = context->now();
-            
-            // 通知GUI取消高亮
-        }
-    }
-    
-    joystick_state_.was_centered = is_centered;
-}
 
-void MenuState::handleButton(RobotStateMachineNode* context,
-                             const custom_interfaces::msg::ButtonIntent::SharedPtr msg) {
-    // 可以添加B键作为取消/返回的备选方案
-    if (msg->button_id == 1 && msg->event_type == 0) {  // B键按下
-        RCLCPP_INFO(context->get_logger(), "B pressed - cancelling menu");
+    if ((context->now() - last_activity_).seconds() > 8.0)
+    {
         context->changeState(context->getStateBeforeMenu());
     }
 }
 
-void MenuState::update(RobotStateMachineNode* context) {
-    // 可以在这里添加超时机制：如果扳机按下后长时间无操作，自动退出
-    if (trigger_state_.is_pressed) {
-        auto now = context->now();
-        if ((now - last_activity_).seconds() > 5.0) {  // 5秒超时
-            RCLCPP_WARN(context->get_logger(), "Menu timeout - returning to previous mode");
-            context->changeState(context->getStateBeforeMenu());
-        }
-    } else {
-        last_activity_ = context->now();
+void MenuState::refreshMenuState(RobotStateMachineNode *context)
+{
+    auto names = getAvailableModes();
+    context->setMenuItems(names);
+    context->setMenuSelection(selection_index_);
+}
+
+int MenuState::angleToOctant(float x, float y) const
+{
+    const float norm_x = -x;
+    const float norm_y = y;
+
+    float angle = std::atan2(norm_y, norm_x);
+    if (angle < 0.0F)
+    {
+        angle += 2.0F * kPi;
     }
+
+    const float sector = (2.0F * kPi) / 8.0F;
+    int octant = static_cast<int>(std::floor((angle + sector * 0.5F) / sector));
+    octant %= 8;
+    return octant;
+}
+
+int MenuState::octantToMenuIndex(int octant) const
+{
+    static constexpr int kOctantToMenu[8] = {
+        1,  // RIGHT -> ARM
+        3,  // UP_RIGHT -> VISION_TASK
+        0,  // UP -> CHASSIS
+        5,  // UP_LEFT -> POLE
+        4,  // LEFT -> IDLE
+        2,  // DOWN_LEFT -> EMERGENCY
+        0,  // DOWN -> CHASSIS
+        1   // DOWN_RIGHT -> ARM
+    };
+
+    if (octant < 0 || octant >= 8)
+    {
+        return selection_index_;
+    }
+
+    const int mapped = kOctantToMenu[octant];
+    if (mapped < 0 || mapped >= static_cast<int>(menu_entries_.size()))
+    {
+        return selection_index_;
+    }
+    return mapped;
 }

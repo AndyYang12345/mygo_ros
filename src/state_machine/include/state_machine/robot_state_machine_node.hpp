@@ -10,9 +10,11 @@
 #include "custom_interfaces/msg/joystick_intent.hpp"
 #include "custom_interfaces/msg/robot_state.hpp"
 #include "custom_interfaces/msg/trigger_intent.hpp"
+#include "custom_interfaces/srv/set_mode.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "state_machine/robot_state.hpp"
+#include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/int32.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "trajectory_msgs/msg/joint_trajectory.hpp"
@@ -24,6 +26,7 @@ public:
 
     void changeState(uint8_t state_enum);
     uint8_t getStateBeforeMenu() const;
+    uint8_t getStateBeforeEmergency() const;
 
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr getChassisCmdPub();
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr getArmCmdPub();
@@ -55,6 +58,9 @@ public:
     void setMenuSelection(int index);
     int getMenuSelection() const;
 
+    bool consumeVisionTaskDone();
+    bool isVisionTaskDone() const;
+
     void sendStopCommands();
 
 private:
@@ -65,10 +71,12 @@ private:
 
     bool isTransitionAllowed(uint8_t from, uint8_t to);
     void publishState();
+    uint8_t mapSetModeToState(uint8_t target_mode) const;
 
     std::map<uint8_t, std::shared_ptr<RobotState>> states_;
     RobotState *current_state_ = nullptr;
     uint8_t state_before_menu_ = 1;
+    uint8_t state_before_emergency_ = 1;
 
     struct Parameters
     {
@@ -84,6 +92,7 @@ private:
 
     JoystickData left_joystick_;
     JoystickData right_joystick_;
+    bool vision_task_done_ = false;
 
     rclcpp::Publisher<custom_interfaces::msg::RobotState>::SharedPtr state_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr chassis_cmd_pub_;
@@ -96,6 +105,9 @@ private:
     rclcpp::Subscription<custom_interfaces::msg::JoystickIntent>::SharedPtr joystick_sub_;
     rclcpp::Subscription<custom_interfaces::msg::TriggerIntent>::SharedPtr trigger_sub_;
     rclcpp::Subscription<custom_interfaces::msg::ComboIntent>::SharedPtr combo_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr vision_task_done_sub_;
+
+    rclcpp::Service<custom_interfaces::srv::SetMode>::SharedPtr set_mode_service_;
 
     rclcpp::TimerBase::SharedPtr control_timer_;
     rclcpp::TimerBase::SharedPtr state_timer_;
