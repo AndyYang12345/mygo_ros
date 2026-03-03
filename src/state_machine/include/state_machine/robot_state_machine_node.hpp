@@ -72,7 +72,7 @@ private:
 
     struct Parameters
     {
-        double chassis_max_linear_speed = 0.5;
+        double chassis_max_linear_speed = 1.0;
         double chassis_max_angular_speed = 1.0;
         double arm_speed_scale = 0.05;
         double joystick_deadzone = 0.1;

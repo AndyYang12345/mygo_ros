@@ -66,7 +66,7 @@ void MenuState::handleTrigger(RobotStateMachineNode* context,
 void MenuState::handleJoystick(RobotStateMachineNode* context,
                                const custom_interfaces::msg::JoystickIntent::SharedPtr msg) {
     // 只处理左摇杆
-    if (msg->joystick_id != 0) return;
+    if (msg->joystick_id != 1) return;
     
     // 只有扳机按下时才处理摇杆选择
     if (!trigger_state_.is_pressed) return;

@@ -56,7 +56,8 @@ private:
         "Chassis Control",      // 上
         "Home",                 // 下 本质是idle状态，保持不动加预设机械臂动作
         "Vision Task"           // 左
-    };
+    };// @todo 从yaml文件读取待实现
+    
     
     // 当前选中的方向
     MenuDirection current_selection_ = MenuDirection::NONE;
