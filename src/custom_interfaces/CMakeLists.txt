@@ -19,6 +19,10 @@ set(msg_files
   "msg/RobotState.msg"
   "msg/MenuNavigation.msg"
   "msg/TriggerIntent.msg"
+  "msg/ArmNamedTarget.msg"
+  "msg/ArmJointTarget.msg"
+  "msg/ArmPoseTarget.msg"
+  "msg/GripperCommand.msg"
 )
 
 set(srv_files

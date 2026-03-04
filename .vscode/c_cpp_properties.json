@@ -10,7 +10,8 @@
                 "/home/harekasa/mygo_ws/install/joystick_parser/**",
                 "/home/harekasa/mygo_ws/src/state_machine/include/**",
                 "/home/harekasa/mygo_ws/src/robot_hardware_interfaces/include/**",
-                "/opt/ros/jazzy/include/geometry_msgs"
+                "/opt/ros/jazzy/include/geometry_msgs",
+                "/usr/include/eigen3"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
