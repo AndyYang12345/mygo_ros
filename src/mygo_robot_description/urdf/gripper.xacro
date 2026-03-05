@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="mygo_gripper" params="prefix:='' parent:='link5'">
+    <link name="${prefix}end_link1">
+      <visual>
+        <origin xyz="0 -0.03 -0.02" rpy="1.5708 0 0"/>
+        <geometry>
+          <box size="0.012 0.06 0.01"/>
+        </geometry>
+        <material name="white"/>
+      </visual>
+      <collision>
+        <origin xyz="0 -0.03 -0.02" rpy="1.5708 0 0"/>
+        <geometry>
+          <box size="0.012 0.06 0.01"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="${prefix}end_joint1" type="revolute">
+      <origin xyz="-0.0284 -0.01 0.0145" rpy="-3.0843 0 -1.5708"/>
+      <parent link="${prefix}${parent}"/>
+      <child link="${prefix}end_link1"/>
+      <axis xyz="0 -0.99836 0.057228"/>
+      <limit lower="-3.14159" upper="3.14159" effort="10" velocity="1"/>
+    </joint>
+
+    <link name="${prefix}end_link2">
+      <visual>
+        <origin xyz="0 0.03 -0.02" rpy="1.5708 0 0"/>
+        <geometry>
+          <box size="0.012 0.06 0.01"/>
+        </geometry>
+        <material name="white"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0.03 -0.02" rpy="1.5708 0 0"/>
+        <geometry>
+          <box size="0.012 0.06 0.01"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="${prefix}end_joint2" type="revolute">
+      <origin xyz="-0.0274 0.014 0.0145" rpy="1.5708 -0.00021712 -1.5708"/>
+      <parent link="${prefix}${parent}"/>
+      <child link="${prefix}end_link2"/>
+      <axis xyz="0 0 -1"/>
+      <limit lower="-3.14159" upper="3.14159" effort="10" velocity="1"/>
+      <mimic joint="${prefix}end_joint1" multiplier="-1" offset="0"/>
+    </joint>
+  </xacro:macro>
+</robot>

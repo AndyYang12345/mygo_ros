@@ -1,0 +1,139 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="mygo_arm" params="prefix:=''>
+    <link name="${prefix}base_link">
+      <visual>
+        <origin xyz="0 0 0.022" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.08 0.08 0.044"/>
+        </geometry>
+        <material name="gray"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0.022" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.08 0.08 0.044"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="${prefix}link1">
+      <visual>
+        <origin xyz="0 0 0.03" rpy="0 0 0"/>
+        <geometry>
+          <cylinder length="0.06" radius="0.024"/>
+        </geometry>
+        <material name="white"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0.03" rpy="0 0 0"/>
+        <geometry>
+          <cylinder length="0.06" radius="0.024"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="${prefix}joint1" type="continuous">
+      <origin xyz="0.0097091 0 0.045" rpy="0 0 -0.0093727"/>
+      <parent link="${prefix}base_link"/>
+      <child link="${prefix}link1"/>
+      <axis xyz="0 0 1"/>
+    </joint>
+
+    <link name="${prefix}link2">
+      <visual>
+        <origin xyz="0 -0.052 0" rpy="1.5708 0 0"/>
+        <geometry>
+          <cylinder length="0.105" radius="0.018"/>
+        </geometry>
+        <material name="dark_gray"/>
+      </visual>
+      <collision>
+        <origin xyz="0 -0.052 0" rpy="1.5708 0 0"/>
+        <geometry>
+          <cylinder length="0.105" radius="0.018"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="${prefix}joint2" type="revolute">
+      <origin xyz="0.010156 0.02714 0.027844" rpy="-1.5708 0 0"/>
+      <parent link="${prefix}link1"/>
+      <child link="${prefix}link2"/>
+      <axis xyz="0 0 -1"/>
+      <limit lower="-3.14159" upper="3.14159" effort="10" velocity="1"/>
+    </joint>
+
+    <link name="${prefix}link3">
+      <visual>
+        <origin xyz="0 -0.05 0" rpy="1.5708 0 0"/>
+        <geometry>
+          <cylinder length="0.10" radius="0.017"/>
+        </geometry>
+        <material name="dark_gray"/>
+      </visual>
+      <collision>
+        <origin xyz="0 -0.05 0" rpy="1.5708 0 0"/>
+        <geometry>
+          <cylinder length="0.10" radius="0.017"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="${prefix}joint3" type="revolute">
+      <origin xyz="-0.00029081 -0.104 0" rpy="-0.066221 0 0.057239"/>
+      <parent link="${prefix}link2"/>
+      <child link="${prefix}link3"/>
+      <axis xyz="0 0.066173 -0.99781"/>
+      <limit lower="-3.14159" upper="3.14159" effort="10" velocity="1"/>
+    </joint>
+
+    <link name="${prefix}link4">
+      <visual>
+        <origin xyz="0 -0.047 0" rpy="1.5708 0 0"/>
+        <geometry>
+          <cylinder length="0.094" radius="0.016"/>
+        </geometry>
+        <material name="gray"/>
+      </visual>
+      <collision>
+        <origin xyz="0 -0.047 0" rpy="1.5708 0 0"/>
+        <geometry>
+          <cylinder length="0.094" radius="0.016"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="${prefix}joint4" type="revolute">
+      <origin xyz="0.0011556 -0.096157 -0.006878" rpy="0 0 0"/>
+      <parent link="${prefix}link3"/>
+      <child link="${prefix}link4"/>
+      <axis xyz="0 0.066173 -0.99781"/>
+      <limit lower="-3.14159" upper="3.14159" effort="10" velocity="1"/>
+    </joint>
+
+    <link name="${prefix}link5">
+      <visual>
+        <origin xyz="-0.02 -0.04 -0.02" rpy="1.5708 0 0"/>
+        <geometry>
+          <cylinder length="0.08" radius="0.015"/>
+        </geometry>
+        <material name="white"/>
+      </visual>
+      <collision>
+        <origin xyz="-0.02 -0.04 -0.02" rpy="1.5708 0 0"/>
+        <geometry>
+          <cylinder length="0.08" radius="0.015"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="${prefix}joint5" type="revolute">
+      <origin xyz="-0.027689 -0.055272 -0.040046" rpy="1.637 0.023059 0.0015295"/>
+      <parent link="${prefix}link4"/>
+      <child link="${prefix}link5"/>
+      <axis xyz="0 0 -1"/>
+      <limit lower="-3.14159" upper="3.14159" effort="10" velocity="1"/>
+    </joint>
+  </xacro:macro>
+</robot>
