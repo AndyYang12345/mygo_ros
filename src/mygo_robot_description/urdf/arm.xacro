@@ -1,34 +1,34 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-  <xacro:macro name="mygo_arm" params="prefix:=''>
+  <xacro:macro name="mygo_arm" params="prefix:=''">
     <link name="${prefix}base_link">
       <visual>
-        <origin xyz="0 0 0.022" rpy="0 0 0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <box size="0.08 0.08 0.044"/>
+          <mesh filename="package://mygo_robot_description/meshes/base_link.STL"/>
         </geometry>
         <material name="gray"/>
       </visual>
       <collision>
-        <origin xyz="0 0 0.022" rpy="0 0 0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <box size="0.08 0.08 0.044"/>
+          <mesh filename="package://mygo_robot_description/meshes/base_link.STL"/>
         </geometry>
       </collision>
     </link>
 
     <link name="${prefix}link1">
       <visual>
-        <origin xyz="0 0 0.03" rpy="0 0 0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <cylinder length="0.06" radius="0.024"/>
+          <mesh filename="package://mygo_robot_description/meshes/link1.STL"/>
         </geometry>
         <material name="white"/>
       </visual>
       <collision>
-        <origin xyz="0 0 0.03" rpy="0 0 0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <cylinder length="0.06" radius="0.024"/>
+          <mesh filename="package://mygo_robot_description/meshes/link1.STL"/>
         </geometry>
       </collision>
     </link>
@@ -42,16 +42,16 @@
 
     <link name="${prefix}link2">
       <visual>
-        <origin xyz="0 -0.052 0" rpy="1.5708 0 0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <cylinder length="0.105" radius="0.018"/>
+          <mesh filename="package://mygo_robot_description/meshes/link2.STL"/>
         </geometry>
         <material name="dark_gray"/>
       </visual>
       <collision>
-        <origin xyz="0 -0.052 0" rpy="1.5708 0 0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <cylinder length="0.105" radius="0.018"/>
+          <mesh filename="package://mygo_robot_description/meshes/link2.STL"/>
         </geometry>
       </collision>
     </link>
@@ -66,16 +66,16 @@
 
     <link name="${prefix}link3">
       <visual>
-        <origin xyz="0 -0.05 0" rpy="1.5708 0 0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <cylinder length="0.10" radius="0.017"/>
+          <mesh filename="package://mygo_robot_description/meshes/link3.STL"/>
         </geometry>
         <material name="dark_gray"/>
       </visual>
       <collision>
-        <origin xyz="0 -0.05 0" rpy="1.5708 0 0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <cylinder length="0.10" radius="0.017"/>
+          <mesh filename="package://mygo_robot_description/meshes/link3.STL"/>
         </geometry>
       </collision>
     </link>
@@ -90,16 +90,16 @@
 
     <link name="${prefix}link4">
       <visual>
-        <origin xyz="0 -0.047 0" rpy="1.5708 0 0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <cylinder length="0.094" radius="0.016"/>
+          <mesh filename="package://mygo_robot_description/meshes/link4.STL"/>
         </geometry>
         <material name="gray"/>
       </visual>
       <collision>
-        <origin xyz="0 -0.047 0" rpy="1.5708 0 0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <cylinder length="0.094" radius="0.016"/>
+          <mesh filename="package://mygo_robot_description/meshes/link4.STL"/>
         </geometry>
       </collision>
     </link>
@@ -114,16 +114,16 @@
 
     <link name="${prefix}link5">
       <visual>
-        <origin xyz="-0.02 -0.04 -0.02" rpy="1.5708 0 0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <cylinder length="0.08" radius="0.015"/>
+          <mesh filename="package://mygo_robot_description/meshes/link5.STL"/>
         </geometry>
         <material name="white"/>
       </visual>
       <collision>
-        <origin xyz="-0.02 -0.04 -0.02" rpy="1.5708 0 0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <cylinder length="0.08" radius="0.015"/>
+          <mesh filename="package://mygo_robot_description/meshes/link5.STL"/>
         </geometry>
       </collision>
     </link>
