@@ -115,6 +115,35 @@ rclcpp::Publisher<std_msgs::msg::String>::SharedPtr RobotStateMachineNode::getGr
     return gripper_cmd_pub_;
 }
 
+rclcpp::Publisher<std_msgs::msg::String>::SharedPtr RobotStateMachineNode::getPoleCmdPub()
+{
+    return pole_cmd_pub_;
+}
+
+rclcpp::Publisher<custom_interfaces::msg::ArmNamedTarget>::SharedPtr
+RobotStateMachineNode::getArmNamedTargetPub()
+{
+    return arm_named_target_pub_;
+}
+
+rclcpp::Publisher<custom_interfaces::msg::ArmPoseTarget>::SharedPtr
+RobotStateMachineNode::getArmPoseTargetPub()
+{
+    return arm_pose_target_pub_;
+}
+
+rclcpp::Publisher<custom_interfaces::msg::ArmJointTarget>::SharedPtr
+RobotStateMachineNode::getArmJointTargetPub()
+{
+    return arm_joint_target_pub_;
+}
+
+rclcpp::Publisher<custom_interfaces::msg::GripperCommand>::SharedPtr
+RobotStateMachineNode::getArmGripperCmdPub()
+{
+    return arm_gripper_cmd_pub_;
+}
+
 rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr RobotStateMachineNode::getPresetPub()
 {
     return preset_pub_;
@@ -212,6 +241,15 @@ void RobotStateMachineNode::setupPublishers()
     chassis_cmd_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd/chassis/velocity", 10);
     arm_cmd_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd/arm/velocity", 10);
     gripper_cmd_pub_ = this->create_publisher<std_msgs::msg::String>("/cmd/gripper/action", 10);
+    pole_cmd_pub_ = this->create_publisher<std_msgs::msg::String>("/cmd/pole/action", 10);
+    arm_named_target_pub_ =
+        this->create_publisher<custom_interfaces::msg::ArmNamedTarget>("/cmd/arm/named_target", 10);
+    arm_pose_target_pub_ =
+        this->create_publisher<custom_interfaces::msg::ArmPoseTarget>("/cmd/arm/pose_target", 10);
+    arm_joint_target_pub_ =
+        this->create_publisher<custom_interfaces::msg::ArmJointTarget>("/cmd/arm/joint_target", 10);
+    arm_gripper_cmd_pub_ =
+        this->create_publisher<custom_interfaces::msg::GripperCommand>("/cmd/arm/gripper", 10);
     preset_pub_ = this->create_publisher<std_msgs::msg::Int32>("/cmd/preset/trigger", 10);
     joint_trajectory_pub_ =
         this->create_publisher<trajectory_msgs::msg::JointTrajectory>("/cmd/arm/joint_trajectory", 10);
@@ -417,7 +455,11 @@ void RobotStateMachineNode::sendStopCommands()
     chassis_cmd_pub_->publish(geometry_msgs::msg::Twist());
     arm_cmd_pub_->publish(geometry_msgs::msg::Twist());
 
-    auto gripper_stop = std_msgs::msg::String();
-    gripper_stop.data = "STOP";
-    gripper_cmd_pub_->publish(gripper_stop);
+    auto arm_gripper_stop = custom_interfaces::msg::GripperCommand();
+    arm_gripper_stop.open = true;
+    arm_gripper_cmd_pub_->publish(arm_gripper_stop);
+
+    auto pole_stop = std_msgs::msg::String();
+    pole_stop.data = "STOP";
+    pole_cmd_pub_->publish(pole_stop);
 }

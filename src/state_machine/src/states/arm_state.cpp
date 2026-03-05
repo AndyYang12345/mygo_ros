@@ -2,14 +2,10 @@
 
 #include <cmath>
 
+#include "custom_interfaces/msg/arm_named_target.hpp"
+#include "custom_interfaces/msg/arm_pose_target.hpp"
+#include "custom_interfaces/msg/gripper_command.hpp"
 #include "state_machine/robot_state_machine_node.hpp"
-
-namespace {
-double applyDeadzone(double value, double deadzone)
-{
-    return std::abs(value) < deadzone ? 0.0 : value;
-}
-}
 
 std::string ArmState::getName() const
 {
@@ -23,14 +19,15 @@ uint8_t ArmState::getStateEnum() const
 
 void ArmState::onEnter(RobotStateMachineNode *context)
 {
-    context->setMenuItems({"B返回菜单"});
-    context->setMenuSelection(0);
+    submenu_active_ = false;
+    submenu_selection_ = 0;
+    updateSubmenuUi(context);
     RCLCPP_INFO(context->get_logger(), "Entered ARM state");
 }
 
 void ArmState::onExit(RobotStateMachineNode *context)
 {
-    context->getArmCmdPub()->publish(geometry_msgs::msg::Twist());
+    (void)context;
 }
 
 void ArmState::handleButton(
@@ -39,12 +36,41 @@ void ArmState::handleButton(
 {
     if (msg->event_type != 0)
     {
+        if (msg->button_id == 4 && msg->event_type == 1 && submenu_active_)
+        {
+            submenu_active_ = false;
+            auto target = custom_interfaces::msg::ArmNamedTarget();
+            target.target_name = presets_[submenu_selection_];
+            context->getArmNamedTargetPub()->publish(target);
+            updateSubmenuUi(context);
+            RCLCPP_INFO(
+                context->get_logger(),
+                "ARM submenu selected named target: %s",
+                target.target_name.c_str());
+        }
+        return;
+    }
+
+    if (msg->button_id == 4)
+    {
+        submenu_active_ = true;
+        updateSubmenuUi(context);
+        return;
+    }
+
+    if (msg->button_id == 0)
+    {
+        auto gripper_cmd = custom_interfaces::msg::GripperCommand();
+        gripper_cmd.open = false;
+        context->getArmGripperCmdPub()->publish(gripper_cmd);
         return;
     }
 
     if (msg->button_id == 1)
     {
-        context->changeState(4);
+        auto gripper_cmd = custom_interfaces::msg::GripperCommand();
+        gripper_cmd.open = true;
+        context->getArmGripperCmdPub()->publish(gripper_cmd);
     }
 }
 
@@ -52,45 +78,63 @@ void ArmState::handleJoystick(
     RobotStateMachineNode *context,
     const custom_interfaces::msg::JoystickIntent::SharedPtr msg)
 {
-    auto arm_twist = geometry_msgs::msg::Twist();
-
+    const auto scale = context->getArmSpeedScale();
     if (msg->joystick_id == 0)
     {
-        arm_twist.linear.x = applyDeadzone(msg->x, context->getJoystickDeadzone()) * context->getArmSpeedScale();
-        arm_twist.linear.y = applyDeadzone(msg->y, context->getJoystickDeadzone()) * context->getArmSpeedScale();
+        cmd_x_ += applyDeadzone(msg->x, context->getJoystickDeadzone()) * scale;
+        cmd_y_ += applyDeadzone(msg->y, context->getJoystickDeadzone()) * scale;
+        publishPoseTarget(context);
     }
     else if (msg->joystick_id == 1)
     {
-        arm_twist.linear.z = applyDeadzone(msg->y, context->getJoystickDeadzone()) * context->getArmSpeedScale();
-        arm_twist.angular.z = applyDeadzone(msg->x, context->getJoystickDeadzone()) * context->getArmSpeedScale();
+        if (submenu_active_)
+        {
+            const float x = msg->x;
+            const float y = msg->y;
+            const float deadzone = 0.25F;
+            const float radius = std::sqrt(x * x + y * y);
+            if (radius >= deadzone)
+            {
+                const int octant = angleToOctant(x, y);
+                if (octant != submenu_selection_)
+                {
+                    submenu_selection_ = octant;
+                    updateSubmenuUi(context);
+                }
+            }
+            return;
+        }
+
+        cmd_z_ += applyDeadzone(msg->y, context->getJoystickDeadzone()) * scale;
+        cmd_yaw_ += applyDeadzone(msg->x, context->getJoystickDeadzone()) * scale;
+        publishPoseTarget(context);
     }
     else if (msg->joystick_id == 2)
     {
-        arm_twist.angular.y = applyDeadzone(msg->y, context->getJoystickDeadzone()) * context->getArmSpeedScale();
+        const auto dpad_y = msg->y;
+        if (dpad_y > 0.5F)
+        {
+            cmd_pitch_ += kPitchStepRad;
+            publishPoseTarget(context);
+        }
+        else if (dpad_y < -0.5F)
+        {
+            cmd_pitch_ -= kPitchStepRad;
+            publishPoseTarget(context);
+        }
     }
     else
     {
         return;
     }
-
-    context->getArmCmdPub()->publish(arm_twist);
 }
 
 void ArmState::handleTrigger(
     RobotStateMachineNode *context,
     const custom_interfaces::msg::TriggerIntent::SharedPtr msg)
 {
-    auto gripper_cmd = std_msgs::msg::String();
-    if (msg->trigger_id == 0)
-    {
-        gripper_cmd.data = "OPEN:" + std::to_string(-msg->value);
-        context->getGripperCmdPub()->publish(gripper_cmd);
-    }
-    else if (msg->trigger_id == 1)
-    {
-        gripper_cmd.data = "CLOSE:" + std::to_string(-msg->value);
-        context->getGripperCmdPub()->publish(gripper_cmd);
-    }
+    (void)context;
+    (void)msg;
 }
 
 void ArmState::handleCombo(
@@ -110,4 +154,54 @@ void ArmState::handleCombo(
 void ArmState::update(RobotStateMachineNode *context)
 {
     (void)context;
+}
+
+uint8_t ArmState::getSubState() const
+{
+    return static_cast<uint8_t>(submenu_selection_);
+}
+
+std::vector<std::string> ArmState::getAvailableModes() const
+{
+    return presets_;
+}
+
+void ArmState::updateSubmenuUi(RobotStateMachineNode *context)
+{
+    context->setMenuItems(presets_);
+    context->setMenuSelection(submenu_selection_);
+}
+
+int ArmState::angleToOctant(float x, float y) const
+{
+    const float norm_x = -x;
+    const float norm_y = y;
+    float angle = std::atan2(norm_y, norm_x);
+    if (angle < 0.0F)
+    {
+        angle += static_cast<float>(2.0 * kPi);
+    }
+
+    const float sector = static_cast<float>((2.0 * kPi) / 8.0);
+    int octant = static_cast<int>(std::floor((angle + sector * 0.5F) / sector));
+    octant %= 8;
+    return octant;
+}
+
+double ArmState::applyDeadzone(double value, double deadzone) const
+{
+    return std::abs(value) < deadzone ? 0.0 : value;
+}
+
+void ArmState::publishPoseTarget(RobotStateMachineNode *context)
+{
+    auto pose_cmd = custom_interfaces::msg::ArmPoseTarget();
+    pose_cmd.x = cmd_x_;
+    pose_cmd.y = cmd_y_;
+    pose_cmd.z = cmd_z_;
+    pose_cmd.roll = cmd_roll_;
+    pose_cmd.pitch = cmd_pitch_;
+    pose_cmd.yaw = cmd_yaw_;
+    pose_cmd.cartesian_path = false;
+    context->getArmPoseTargetPub()->publish(pose_cmd);
 }

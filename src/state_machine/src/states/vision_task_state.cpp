@@ -2,6 +2,8 @@
 
 #include <cmath>
 
+#include "custom_interfaces/msg/arm_pose_target.hpp"
+#include "custom_interfaces/msg/gripper_command.hpp"
 #include "state_machine/robot_state_machine_node.hpp"
 
 std::string VisionTaskState::getName() const
@@ -67,23 +69,39 @@ void VisionTaskState::handleJoystick(
 
     if (msg->joystick_id == 0)
     {
-        auto arm_twist = geometry_msgs::msg::Twist();
-        arm_twist.linear.x = applyDeadzone(msg->x, context->getJoystickDeadzone()) * context->getArmSpeedScale();
-        arm_twist.linear.y = applyDeadzone(msg->y, context->getJoystickDeadzone()) * context->getArmSpeedScale();
-        context->getArmCmdPub()->publish(arm_twist);
+        auto pose_cmd = custom_interfaces::msg::ArmPoseTarget();
+        pose_cmd.x = applyDeadzone(msg->x, context->getJoystickDeadzone()) * context->getArmSpeedScale();
+        pose_cmd.y = applyDeadzone(msg->y, context->getJoystickDeadzone()) * context->getArmSpeedScale();
+        pose_cmd.z = 0.0;
+        pose_cmd.roll = 0.0;
+        pose_cmd.pitch = 0.0;
+        pose_cmd.yaw = 0.0;
+        pose_cmd.cartesian_path = false;
+        context->getArmPoseTargetPub()->publish(pose_cmd);
     }
     else if (msg->joystick_id == 1)
     {
-        auto arm_twist = geometry_msgs::msg::Twist();
-        arm_twist.linear.z = applyDeadzone(msg->y, context->getJoystickDeadzone()) * context->getArmSpeedScale();
-        arm_twist.angular.z = applyDeadzone(msg->x, context->getJoystickDeadzone()) * context->getArmSpeedScale();
-        context->getArmCmdPub()->publish(arm_twist);
+        auto pose_cmd = custom_interfaces::msg::ArmPoseTarget();
+        pose_cmd.x = 0.0;
+        pose_cmd.y = 0.0;
+        pose_cmd.z = applyDeadzone(msg->y, context->getJoystickDeadzone()) * context->getArmSpeedScale();
+        pose_cmd.roll = 0.0;
+        pose_cmd.pitch = 0.0;
+        pose_cmd.yaw = applyDeadzone(msg->x, context->getJoystickDeadzone()) * context->getArmSpeedScale();
+        pose_cmd.cartesian_path = false;
+        context->getArmPoseTargetPub()->publish(pose_cmd);
     }
     else if (msg->joystick_id == 2)
     {
-        auto arm_twist = geometry_msgs::msg::Twist();
-        arm_twist.angular.y = applyDeadzone(msg->y, context->getJoystickDeadzone()) * context->getArmSpeedScale();
-        context->getArmCmdPub()->publish(arm_twist);
+        auto pose_cmd = custom_interfaces::msg::ArmPoseTarget();
+        pose_cmd.x = 0.0;
+        pose_cmd.y = 0.0;
+        pose_cmd.z = 0.0;
+        pose_cmd.roll = 0.0;
+        pose_cmd.pitch = applyDeadzone(msg->y, context->getJoystickDeadzone()) * context->getArmSpeedScale();
+        pose_cmd.yaw = 0.0;
+        pose_cmd.cartesian_path = false;
+        context->getArmPoseTargetPub()->publish(pose_cmd);
     }
 }
 
@@ -96,16 +114,17 @@ void VisionTaskState::handleTrigger(
         return;
     }
 
-    auto cmd = std_msgs::msg::String();
     if (msg->trigger_id == 0)
     {
-        cmd.data = "OPEN:" + std::to_string(-msg->value);
-        context->getGripperCmdPub()->publish(cmd);
+        auto cmd = custom_interfaces::msg::GripperCommand();
+        cmd.open = true;
+        context->getArmGripperCmdPub()->publish(cmd);
     }
     else if (msg->trigger_id == 1)
     {
-        cmd.data = "CLOSE:" + std::to_string(-msg->value);
-        context->getGripperCmdPub()->publish(cmd);
+        auto cmd = custom_interfaces::msg::GripperCommand();
+        cmd.open = false;
+        context->getArmGripperCmdPub()->publish(cmd);
     }
 }
 

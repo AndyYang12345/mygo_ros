@@ -24,6 +24,10 @@ add_executable(state_machine
   src/states/vision_task_state.cpp
   src/states/emergency_state.cpp
 )
+
+add_executable(arm_joint_servo_test_node
+  src/arm_joint_servo_test_node.cpp
+)
 target_include_directories(state_machine PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
@@ -37,12 +41,25 @@ ament_target_dependencies(state_machine
   custom_interfaces
 )
 
+ament_target_dependencies(arm_joint_servo_test_node
+  rclcpp
+  custom_interfaces
+)
+
 install(TARGETS state_machine
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(TARGETS arm_joint_servo_test_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
 install(DIRECTORY include/
   DESTINATION include
+)
+
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
 )
 
 ament_package()

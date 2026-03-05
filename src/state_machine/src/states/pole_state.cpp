@@ -27,7 +27,7 @@ void PoleState::onExit(RobotStateMachineNode *context)
     context->getChassisCmdPub()->publish(geometry_msgs::msg::Twist());
     auto stop_cmd = std_msgs::msg::String();
     stop_cmd.data = "POLE_STOP";
-    context->getGripperCmdPub()->publish(stop_cmd);
+    context->getPoleCmdPub()->publish(stop_cmd);
 }
 
 void PoleState::handleButton(
@@ -75,7 +75,7 @@ void PoleState::handleTrigger(
         }
         auto pole_cmd = std_msgs::msg::String();
         pole_cmd.data = "POLE_ROTATE:" + std::to_string(msg->value);
-        context->getGripperCmdPub()->publish(pole_cmd);
+        context->getPoleCmdPub()->publish(pole_cmd);
         return;
     }
 
@@ -84,7 +84,7 @@ void PoleState::handleTrigger(
         pole_locked_ = true;
         auto pole_cmd = std_msgs::msg::String();
         pole_cmd.data = "POLE_LOCK";
-        context->getGripperCmdPub()->publish(pole_cmd);
+        context->getPoleCmdPub()->publish(pole_cmd);
     }
 }
 

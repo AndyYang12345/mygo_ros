@@ -142,8 +142,30 @@ private:
 			return false;
 		}
 
+		std::vector<int> changed_servo_ids;
+		changed_servo_ids.reserve(kArmServoCount);
+
+		if (!last_direct_joints_valid_) {
+			for (int servo_id = 0; servo_id < kArmServoCount; ++servo_id) {
+				changed_servo_ids.push_back(servo_id);
+			}
+		} else {
+			constexpr double kDirectJointChangeEpsilon = 1e-6;
+			for (int servo_id = 0; servo_id < kArmServoCount; ++servo_id) {
+				const auto delta = std::abs(joints[servo_id] - last_direct_joints_[servo_id]);
+				if (delta > kDirectJointChangeEpsilon) {
+					changed_servo_ids.push_back(servo_id);
+				}
+			}
+		}
+
+		if (changed_servo_ids.empty()) {
+			RCLCPP_DEBUG(this->get_logger(), "Direct joint command has no servo changes, skip serial send.");
+			return true;
+		}
+
 		std::string payload;
-		for (int servo_id = 0; servo_id < kArmServoCount; ++servo_id) {
+		for (const int servo_id : changed_servo_ids) {
 			const double degree = joints[servo_id] * 180.0 / M_PI;
 			const int pwm = angleDegreeToPwm(degree);
 			payload += formatServoCommand(servo_id, pwm, duration_ms);
@@ -153,6 +175,26 @@ private:
 			RCLCPP_ERROR(this->get_logger(), "Failed to send direct joint payload: %s", payload.c_str());
 			return false;
 		}
+
+		last_direct_joints_.assign(joints.begin(), joints.begin() + kArmServoCount);
+		last_direct_joints_valid_ = true;
+
+		int selected_servo_id = changed_servo_ids.front();
+		double max_delta = 0.0;
+		for (const int servo_id : changed_servo_ids) {
+			const double delta = std::abs(joints[servo_id] - last_reported_joints_[servo_id]);
+			if (delta > max_delta) {
+				max_delta = delta;
+				selected_servo_id = servo_id;
+			}
+			last_reported_joints_[servo_id] = joints[servo_id];
+		}
+
+		RCLCPP_INFO(
+			this->get_logger(),
+			"Direct mode selected servo id: %d, changed_count=%zu",
+			selected_servo_id,
+			changed_servo_ids.size());
 
 		return true;
 	}
@@ -450,6 +492,9 @@ private:
 	std::vector<std::string> arm_joint_names_;
 
 	std::unique_ptr<SendCommand> sender_;
+	std::vector<double> last_direct_joints_;
+	std::vector<double> last_reported_joints_ = std::vector<double>(kArmServoCount, 0.0);
+	bool last_direct_joints_valid_ = false;
 	bool moveit_ready_ = false;
 	rclcpp::TimerBase::SharedPtr moveit_init_timer_;
 	std::shared_ptr<MoveGroupInterface> arm_;
