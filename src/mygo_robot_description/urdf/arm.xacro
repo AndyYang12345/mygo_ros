@@ -61,7 +61,7 @@
       <parent link="${prefix}link1"/>
       <child link="${prefix}link2"/>
       <axis xyz="0 0 -1"/>
-      <limit lower="-3.14159" upper="3.14159" effort="10" velocity="1"/>
+      <limit lower="-2.35619" upper="2.35619" effort="10" velocity="1"/>
     </joint>
 
     <link name="${prefix}link3">
@@ -85,7 +85,7 @@
       <parent link="${prefix}link2"/>
       <child link="${prefix}link3"/>
       <axis xyz="0 0.066173 -0.99781"/>
-      <limit lower="-3.14159" upper="3.14159" effort="10" velocity="1"/>
+      <limit lower="-2.35619" upper="2.35619" effort="10" velocity="1"/>
     </joint>
 
     <link name="${prefix}link4">
@@ -109,7 +109,7 @@
       <parent link="${prefix}link3"/>
       <child link="${prefix}link4"/>
       <axis xyz="0 0.066173 -0.99781"/>
-      <limit lower="-3.14159" upper="3.14159" effort="10" velocity="1"/>
+      <limit lower="-2.35619" upper="2.35619" effort="10" velocity="1"/>
     </joint>
 
     <link name="${prefix}link5">
@@ -133,7 +133,7 @@
       <parent link="${prefix}link4"/>
       <child link="${prefix}link5"/>
       <axis xyz="0 0 -1"/>
-      <limit lower="-3.14159" upper="3.14159" effort="10" velocity="1"/>
+      <limit lower="-2.35619" upper="2.35619" effort="10" velocity="1"/>
     </joint>
   </xacro:macro>
 </robot>
