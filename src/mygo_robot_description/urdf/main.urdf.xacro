@@ -3,6 +3,7 @@
   <xacro:include filename="$(find mygo_robot_description)/urdf/common_properties.xacro"/>
   <xacro:include filename="$(find mygo_robot_description)/urdf/arm.xacro"/>
   <xacro:include filename="$(find mygo_robot_description)/urdf/gripper.xacro"/>
+  <xacro:include filename="$(find mygo_robot_description)/urdf/mygo.ros2_control.xacro"/>
 
   <xacro:mygo_arm/>
   <xacro:mygo_gripper/>
