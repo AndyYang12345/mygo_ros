@@ -107,8 +107,9 @@ private:
 
 	static int angleDegreeToPwm(double degree)
 	{
-		const double bounded_degree = clamp(degree, 0.0, 270.0);
-		const double pwm = 500.0 + (bounded_degree / 270.0) * 2000.0;
+		// Centered mapping: 0 deg -> 1500, -135..135 deg -> 500..2500.
+		const double bounded_degree = clamp(degree, -135.0, 135.0);
+		const double pwm = 1500.0 + (bounded_degree / 135.0) * 1000.0;
 		return static_cast<int>(std::lround(pwm));
 	}
 
@@ -124,6 +125,16 @@ private:
 			 << '!';
         RCLCPP_INFO(this->get_logger(), "Formatted servo command: %s", ss.str().c_str());
 		return ss.str();
+	}
+
+	std::string formatArmFrame(const std::vector<std::string> &joint_commands) const
+	{
+		std::string frame = "{";
+		for (const auto &cmd : joint_commands) {
+			frame += cmd;
+		}
+		frame += "}";
+		return frame;
 	}
 
 	bool sendDirectJointCommand(const std::vector<double> &joints, int duration_ms)
@@ -142,34 +153,15 @@ private:
 			return false;
 		}
 
-		std::vector<int> changed_servo_ids;
-		changed_servo_ids.reserve(kArmServoCount);
-
-		if (!last_direct_joints_valid_) {
-			for (int servo_id = 0; servo_id < kArmServoCount; ++servo_id) {
-				changed_servo_ids.push_back(servo_id);
-			}
-		} else {
-			constexpr double kDirectJointChangeEpsilon = 1e-6;
-			for (int servo_id = 0; servo_id < kArmServoCount; ++servo_id) {
-				const auto delta = std::abs(joints[servo_id] - last_direct_joints_[servo_id]);
-				if (delta > kDirectJointChangeEpsilon) {
-					changed_servo_ids.push_back(servo_id);
-				}
-			}
-		}
-
-		if (changed_servo_ids.empty()) {
-			RCLCPP_DEBUG(this->get_logger(), "Direct joint command has no servo changes, skip serial send.");
-			return true;
-		}
-
-		std::string payload;
-		for (const int servo_id : changed_servo_ids) {
+		std::vector<std::string> joint_commands;
+		joint_commands.reserve(kArmServoCount);
+		for (int servo_id = 0; servo_id < kArmServoCount; ++servo_id) {
 			const double degree = joints[servo_id] * 180.0 / M_PI;
 			const int pwm = angleDegreeToPwm(degree);
-			payload += formatServoCommand(servo_id, pwm, duration_ms);
+			joint_commands.push_back(formatServoCommand(servo_id, pwm, duration_ms));
 		}
+
+		const std::string payload = formatArmFrame(joint_commands);
 
 		if (!sender_->send(payload)) {
 			RCLCPP_ERROR(this->get_logger(), "Failed to send direct joint payload: %s", payload.c_str());
@@ -179,9 +171,9 @@ private:
 		last_direct_joints_.assign(joints.begin(), joints.begin() + kArmServoCount);
 		last_direct_joints_valid_ = true;
 
-		int selected_servo_id = changed_servo_ids.front();
+		int selected_servo_id = 0;
 		double max_delta = 0.0;
-		for (const int servo_id : changed_servo_ids) {
+		for (int servo_id = 0; servo_id < kArmServoCount; ++servo_id) {
 			const double delta = std::abs(joints[servo_id] - last_reported_joints_[servo_id]);
 			if (delta > max_delta) {
 				max_delta = delta;
@@ -192,9 +184,9 @@ private:
 
 		RCLCPP_INFO(
 			this->get_logger(),
-			"Direct mode selected servo id: %d, changed_count=%zu",
+			"Direct mode selected servo id: %d, sent_count=%d",
 			selected_servo_id,
-			changed_servo_ids.size());
+			kArmServoCount);
 
 		return true;
 	}
@@ -313,23 +305,22 @@ private:
 
 		for (const auto &point : trajectory.points) {
 			const int duration_ms = durationForPoint(point, previous, min_segment_time_ms_);
-			std::string payload;
+			std::vector<std::string> joint_commands;
+			joint_commands.reserve(kArmServoCount);
 
 			for (int servo_id = 0; servo_id < kArmServoCount; ++servo_id) {
 				const int joint_index = joint_indices[servo_id];
 				if (joint_index < 0 || joint_index >= static_cast<int>(point.positions.size())) {
-					continue;
+					RCLCPP_ERROR(this->get_logger(), "Invalid joint index for servo_id=%d in trajectory point.", servo_id);
+					return false;
 				}
 
 				const double degree = point.positions[joint_index] * 180.0 / M_PI;
 				const int pwm = angleDegreeToPwm(degree);
-				payload += formatServoCommand(servo_id, pwm, duration_ms);
+				joint_commands.push_back(formatServoCommand(servo_id, pwm, duration_ms));
 			}
 
-			if (payload.empty()) {
-				RCLCPP_ERROR(this->get_logger(), "No valid servo command generated for trajectory point.");
-				return false;
-			}
+			const std::string payload = formatArmFrame(joint_commands);
 
 			if (!sender_->send(payload)) {
 				RCLCPP_ERROR(this->get_logger(), "Failed to send arm payload: %s", payload.c_str());
