@@ -1,0 +1,25 @@
+moveit_setup_assistant_config:
+  urdf:
+    package: mygo_robot_description
+    relative_path: urdf/main.urdf.xacro
+  srdf:
+    relative_path: config/mygo.srdf
+  package_settings:
+    author_name: Harekasa
+    author_email: todo@todo.com
+    generated_timestamp: 1772798288
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity
+  modified_urdf:
+    xacros:
+      - control_xacro
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity
