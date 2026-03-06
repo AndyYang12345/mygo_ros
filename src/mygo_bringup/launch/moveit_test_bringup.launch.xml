@@ -22,7 +22,7 @@
 
     <include file="$(find-pkg-share mygo_moveit_config)/launch/move_group.launch.py" />
 
-    <!-- <node pkg="mygo_commander" exec="commander_template"/> -->
+    <node pkg="robot_hardware_interfaces" exec="commander" output="screen"/>
 
     <node pkg="rviz2" exec="rviz2" output="screen"
           args="-d $(var rviz_config_path)"/>

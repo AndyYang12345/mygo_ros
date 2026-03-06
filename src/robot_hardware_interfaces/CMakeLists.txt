@@ -14,12 +14,14 @@ find_package(trajectory_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(moveit_msgs REQUIRED)
 find_package(tf2 REQUIRED)
+find_package(example_interfaces REQUIRED)
 find_package(custom_interfaces REQUIRED)
 
 
 set(targets
     chassis_serial_node
   arm_serial_node
+  commander_template
 )
 
 add_executable(chassis_serial_node
@@ -51,6 +53,18 @@ install(TARGETS arm_serial_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
+add_executable(commander
+    src/commander.cpp
+)
+target_include_directories(commander PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
+target_compile_features(commander PUBLIC c_std_99 cxx_std_17)
+
+install(TARGETS commander
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 install(DIRECTORY include/
   DESTINATION include
 )
@@ -73,5 +87,18 @@ ament_target_dependencies(arm_serial_node
   tf2
   custom_interfaces
 )
+
+ament_target_dependencies(commander
+  rclcpp
+  std_msgs
+  geometry_msgs
+  trajectory_msgs
+  moveit_ros_planning_interface
+  moveit_msgs
+  example_interfaces
+  tf2
+  custom_interfaces
+)
+ament_export_dependencies(rosidl_default_runtime)
 
 ament_package()
