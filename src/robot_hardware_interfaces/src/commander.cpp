@@ -2,10 +2,18 @@
 #include <moveit/move_group_interface/move_group_interface.hpp>
 #include <example_interfaces/msg/float64_multi_array.hpp>
 #include <custom_interfaces/msg/arm_pose_target.hpp>
+#include <custom_interfaces/msg/arm_joint_target.hpp>
 #include <custom_interfaces/msg/gripper_command.hpp>
+#include <trajectory_msgs/msg/joint_trajectory.hpp>
+
+#include <algorithm>
+#include <chrono>
+#include <thread>
+#include <unordered_map>
 
 using Float64MultiArray = example_interfaces::msg::Float64MultiArray;
 using ArmPoseTarget = custom_interfaces::msg::ArmPoseTarget;
+using ArmJointTarget = custom_interfaces::msg::ArmJointTarget;
 using GripperCommand = custom_interfaces::msg::GripperCommand;
 using MoveGroupInterface = moveit::planning_interface::MoveGroupInterface;
 
@@ -32,6 +40,11 @@ public:
             "arm_pose_target",
             10,
             std::bind(&Commander::poseCmdCallback, this, std::placeholders::_1)
+        );
+
+        arm_joint_target_pub_ = node_->create_publisher<ArmJointTarget>(
+            "/cmd/arm/joint_target",
+            10
         );
     }
 
@@ -70,6 +83,9 @@ public:
             moveit_msgs::msg::RobotTrajectory trajectory;
             double fraction = arm_->computeCartesianPath(waypoints, 0.01, trajectory);
             if(fraction == 1.0){
+                if (!publishArmTrajectory(trajectory.joint_trajectory)) {
+                    RCLCPP_WARN(node_->get_logger(), "Failed to publish cartesian trajectory to /cmd/arm/joint_target.");
+                }
                 arm_->execute(trajectory);
             }
         }
@@ -86,12 +102,70 @@ public:
     }
 private:
 
+    bool publishArmTrajectory(const trajectory_msgs::msg::JointTrajectory &trajectory){
+        if (trajectory.points.empty()) {
+            RCLCPP_ERROR(node_->get_logger(), "Planned arm trajectory has no points.");
+            return false;
+        }
+
+        static const std::vector<std::string> kArmJointNames = {
+            "joint1", "joint2", "joint3", "joint4", "joint5"
+        };
+
+        std::unordered_map<std::string, size_t> name_to_index;
+        name_to_index.reserve(trajectory.joint_names.size());
+        for (size_t i = 0; i < trajectory.joint_names.size(); ++i) {
+            name_to_index[trajectory.joint_names[i]] = i;
+        }
+
+        std::vector<int> indices;
+        indices.reserve(kArmJointNames.size());
+        for (const auto &joint_name : kArmJointNames) {
+            const auto it = name_to_index.find(joint_name);
+            if (it == name_to_index.end()) {
+                RCLCPP_ERROR(node_->get_logger(), "Trajectory does not contain required joint: %s", joint_name.c_str());
+                return false;
+            }
+            indices.push_back(static_cast<int>(it->second));
+        }
+
+        rclcpp::Duration previous_from_start(0, 0);
+        for (const auto &point : trajectory.points) {
+            ArmJointTarget msg;
+            msg.joints.reserve(kArmJointNames.size());
+            for (const int idx : indices) {
+                if (idx < 0 || static_cast<size_t>(idx) >= point.positions.size()) {
+                    RCLCPP_ERROR(node_->get_logger(), "Trajectory point index out of range when publishing arm joint target.");
+                    return false;
+                }
+                msg.joints.push_back(point.positions[static_cast<size_t>(idx)]);
+            }
+
+            arm_joint_target_pub_->publish(msg);
+
+            const rclcpp::Duration current_from_start(point.time_from_start);
+            const auto delta = current_from_start - previous_from_start;
+            previous_from_start = current_from_start;
+
+            if (delta.nanoseconds() > 0) {
+                std::this_thread::sleep_for(std::chrono::nanoseconds(delta.nanoseconds()));
+            }
+        }
+
+        RCLCPP_INFO(node_->get_logger(), "Published %zu trajectory points to /cmd/arm/joint_target", trajectory.points.size());
+        return true;
+    }
+
     void planAndExecute(const std::shared_ptr<MoveGroupInterface> &interface){
-        // Here you can add your MoveIt! related code to test the functionality.
         MoveGroupInterface::Plan plan;
         bool success = (interface->plan(plan) == moveit::core::MoveItErrorCode::SUCCESS);
         if (success) {
             RCLCPP_INFO(node_->get_logger(), "Planning was successful.");
+            if (interface.get() == arm_.get()) {
+                if (!publishArmTrajectory(plan.trajectory.joint_trajectory)) {
+                    RCLCPP_WARN(node_->get_logger(), "Failed to publish planned arm trajectory to /cmd/arm/joint_target.");
+                }
+            }
             interface->execute(plan);
         } else {
             RCLCPP_ERROR(node_->get_logger(), "Planning failed.");
@@ -106,6 +180,7 @@ private:
     rclcpp::Subscription<GripperCommand>::SharedPtr open_gripper_sub_;
     rclcpp::Subscription<Float64MultiArray>::SharedPtr joint_cmd_sub_;
     rclcpp::Subscription<ArmPoseTarget>::SharedPtr pose_cmd_sub_;
+    rclcpp::Publisher<ArmJointTarget>::SharedPtr arm_joint_target_pub_;
 
     void openGripperCallback(const GripperCommand &msg){
         if (msg.open) {
