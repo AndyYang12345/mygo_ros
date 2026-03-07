@@ -4,7 +4,7 @@
             "name": "Linux",
             "includePath": [
                 "${default}",
-                "/home/harekasa/mygo_ws/src/joystick_parser/include/**",
+                "/home/harekasa/mygo_ws/src/joystick_parser/**",
                 "/opt/ros/jazzy/include/**",
                 "/home/harekasa/mygo_ws/install/custom_interfaces/**",
                 "/home/harekasa/mygo_ws/install/joystick_parser/**",

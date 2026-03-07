@@ -46,6 +46,19 @@ private:
     "box_right"
   };
 
+  // Map 8-direction submenu selections to valid MoveIt named targets.
+  // mygo.srdf currently provides: home, pose_1, pose_2.
+  std::vector<std::string> named_target_map_ = {
+    "home",
+    "pose_1",
+    "pose_2",
+    "pose_1",
+    "home",
+    "pose_2",
+    "pose_1",
+    "home"
+  };
+
   bool submenu_active_ = false;
   int submenu_selection_ = 0;
 

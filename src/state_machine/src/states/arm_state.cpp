@@ -7,6 +7,12 @@
 #include "custom_interfaces/msg/gripper_command.hpp"
 #include "state_machine/robot_state_machine_node.hpp"
 
+namespace {
+constexpr float kPiFloat = 3.14159265358979323846F;
+const char *kOctantNames[8] = {
+    "RIGHT", "UP_RIGHT", "UP", "UP_LEFT", "LEFT", "DOWN_LEFT", "DOWN", "DOWN_RIGHT"};
+}
+
 std::string ArmState::getName() const
 {
     return "ARM";
@@ -40,12 +46,20 @@ void ArmState::handleButton(
         {
             submenu_active_ = false;
             auto target = custom_interfaces::msg::ArmNamedTarget();
-            target.target_name = presets_[submenu_selection_];
+            if (submenu_selection_ >= 0 && submenu_selection_ < static_cast<int>(named_target_map_.size()))
+            {
+                target.target_name = named_target_map_[submenu_selection_];
+            }
+            else
+            {
+                target.target_name = "home";
+            }
             context->getArmNamedTargetPub()->publish(target);
             updateSubmenuUi(context);
             RCLCPP_INFO(
                 context->get_logger(),
-                "ARM submenu selected named target: %s",
+                "ARM submenu selected index %d -> named target: %s",
+                submenu_selection_,
                 target.target_name.c_str());
         }
         return;
@@ -78,14 +92,7 @@ void ArmState::handleJoystick(
     RobotStateMachineNode *context,
     const custom_interfaces::msg::JoystickIntent::SharedPtr msg)
 {
-    const auto scale = context->getArmSpeedScale();
-    if (msg->joystick_id == 0)
-    {
-        cmd_x_ += applyDeadzone(msg->x, context->getJoystickDeadzone()) * scale;
-        cmd_y_ += applyDeadzone(msg->y, context->getJoystickDeadzone()) * scale;
-        publishPoseTarget(context);
-    }
-    else if (msg->joystick_id == 1)
+    if (msg->joystick_id == 1)
     {
         if (submenu_active_)
         {
@@ -100,33 +107,36 @@ void ArmState::handleJoystick(
                 {
                     submenu_selection_ = octant;
                     updateSubmenuUi(context);
+
+                    const float norm_x = -x;
+                    const float norm_y = y;
+                    const float angle_rad = std::atan2(norm_y, norm_x);
+                    const float angle_deg = angle_rad * 180.0F / kPiFloat;
+
+                    std::string mapped_target = "home";
+                    if (submenu_selection_ >= 0 && submenu_selection_ < static_cast<int>(named_target_map_.size()))
+                    {
+                        mapped_target = named_target_map_[submenu_selection_];
+                    }
+
+                    RCLCPP_INFO(
+                        context->get_logger(),
+                        "[ARM_SUBMENU] angle=%.1f deg, octant=%s -> index=%d, item=%s, named_target=%s",
+                        angle_deg,
+                        kOctantNames[submenu_selection_],
+                        submenu_selection_,
+                        presets_[submenu_selection_].c_str(),
+                        mapped_target.c_str());
                 }
             }
             return;
         }
+    }
 
-        cmd_z_ += applyDeadzone(msg->y, context->getJoystickDeadzone()) * scale;
-        cmd_yaw_ += applyDeadzone(msg->x, context->getJoystickDeadzone()) * scale;
-        publishPoseTarget(context);
-    }
-    else if (msg->joystick_id == 2)
-    {
-        const auto dpad_y = msg->y;
-        if (dpad_y > 0.5F)
-        {
-            cmd_pitch_ += kPitchStepRad;
-            publishPoseTarget(context);
-        }
-        else if (dpad_y < -0.5F)
-        {
-            cmd_pitch_ -= kPitchStepRad;
-            publishPoseTarget(context);
-        }
-    }
-    else
-    {
-        return;
-    }
+    // Disable joystick-based pose control in ARM mode when serial node runs in direct mode.
+    // Keep joystick input only for submenu selection above.
+    (void)context;
+    return;
 }
 
 void ArmState::handleTrigger(

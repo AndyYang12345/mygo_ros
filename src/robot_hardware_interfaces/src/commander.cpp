@@ -1,6 +1,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <moveit/move_group_interface/move_group_interface.hpp>
 #include <example_interfaces/msg/float64_multi_array.hpp>
+#include <custom_interfaces/msg/arm_named_target.hpp>
 #include <custom_interfaces/msg/arm_pose_target.hpp>
 #include <custom_interfaces/msg/arm_joint_target.hpp>
 #include <custom_interfaces/msg/gripper_command.hpp>
@@ -12,6 +13,7 @@
 #include <unordered_map>
 
 using Float64MultiArray = example_interfaces::msg::Float64MultiArray;
+using ArmNamedTarget = custom_interfaces::msg::ArmNamedTarget;
 using ArmPoseTarget = custom_interfaces::msg::ArmPoseTarget;
 using ArmJointTarget = custom_interfaces::msg::ArmJointTarget;
 using GripperCommand = custom_interfaces::msg::GripperCommand;
@@ -26,18 +28,24 @@ public:
         arm_->setMaxAccelerationScalingFactor(1.0);
 
         gripper_ = std::make_shared<MoveGroupInterface>(node_, "gripper");
+        // Canonical input topics under /cmd/arm/*
         open_gripper_sub_ = node_->create_subscription<GripperCommand>(
-            "open_gripper",
+            "/cmd/arm/gripper",
             10,
             std::bind(&Commander::openGripperCallback, this, std::placeholders::_1)
         );
         joint_cmd_sub_ = node_->create_subscription<Float64MultiArray>(
-            "joint_command",
+            "/cmd/arm/joint_command",
             10,
             std::bind(&Commander::jointCmdCallback, this, std::placeholders::_1)
         );
+        named_target_sub_ = node_->create_subscription<ArmNamedTarget>(
+            "/cmd/arm/named_target",
+            10,
+            std::bind(&Commander::namedTargetCallback, this, std::placeholders::_1)
+        );
         pose_cmd_sub_ = node_->create_subscription<ArmPoseTarget>(
-            "arm_pose_target",
+            "/cmd/arm/pose_target",
             10,
             std::bind(&Commander::poseCmdCallback, this, std::placeholders::_1)
         );
@@ -179,8 +187,13 @@ private:
 
     rclcpp::Subscription<GripperCommand>::SharedPtr open_gripper_sub_;
     rclcpp::Subscription<Float64MultiArray>::SharedPtr joint_cmd_sub_;
+    rclcpp::Subscription<ArmNamedTarget>::SharedPtr named_target_sub_;
     rclcpp::Subscription<ArmPoseTarget>::SharedPtr pose_cmd_sub_;
     rclcpp::Publisher<ArmJointTarget>::SharedPtr arm_joint_target_pub_;
+
+    void namedTargetCallback(const ArmNamedTarget &msg){
+        goToNamedTarget(msg.target_name);
+    }
 
     void openGripperCallback(const GripperCommand &msg){
         if (msg.open) {
