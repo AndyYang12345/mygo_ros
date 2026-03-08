@@ -11,7 +11,11 @@
                 "/home/harekasa/mygo_ws/src/state_machine/include/**",
                 "/home/harekasa/mygo_ws/src/robot_hardware_interfaces/include/**",
                 "/opt/ros/jazzy/include/geometry_msgs",
-                "/usr/include/eigen3"
+                "/usr/include/eigen3",
+                "/usr/include/x86_64-linux-gnu/qt5/QtWidgets",
+                "/usr/include/x86_64-linux-gnu/qt5",
+                "/usr/include/x86_64-linux-gnu/qt5/QtCore",
+                "/usr/include/x86_64-linux-gnu/qt5/QtGui"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",

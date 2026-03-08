@@ -16,6 +16,7 @@
 #include <QPen>
 #include <QTimer>
 #include <QWidget>
+#include <QString>
 
 #include "custom_interfaces/msg/button_intent.hpp"
 #include "custom_interfaces/msg/joystick_intent.hpp"
@@ -127,6 +128,36 @@ std::vector<std::string> expandToEightSub(const std::vector<std::string> & avail
   }
   return result;
 }
+
+std::string normalizeLabelForWrap(const std::string & raw)
+{
+  if (raw == "-") {
+    return raw;
+  }
+
+  std::string out;
+  out.reserve(raw.size() + 8);
+  for (size_t i = 0; i < raw.size(); ++i) {
+    const char c = raw[i];
+    if (c == '_') {
+      out.push_back(' ');
+      continue;
+    }
+
+    if (i > 0 && std::isupper(static_cast<unsigned char>(c)) &&
+      std::islower(static_cast<unsigned char>(raw[i - 1])))
+    {
+      out.push_back(' ');
+    }
+    out.push_back(c);
+  }
+  return out;
+}
+
+double smoothApproach(double current, double target, double alpha)
+{
+  return current + (target - current) * alpha;
+}
 }  // namespace
 
 class MenuUiWidget : public QWidget
@@ -135,8 +166,8 @@ public:
   MenuUiWidget()
   {
     setWindowTitle("MyGo Menu UI");
-    resize(1280, 720);
-    setMinimumSize(960, 540);
+    resize(1480, 860);
+    setMinimumSize(1200, 700);
   }
 
   void updateRobotState(const custom_interfaces::msg::RobotState & msg)
@@ -249,6 +280,8 @@ protected:
     int sub_octant = 0;
     int selected_pole_id = 0;
     std::array<bool, 2> pole_locked_state = {false, false};
+    double left_radius = 150.0;
+    double right_radius = 128.0;
 
     {
       std::lock_guard<std::mutex> lock(mutex_);
@@ -262,6 +295,8 @@ protected:
       sub_octant = sub_octant_;
       selected_pole_id = selected_pole_id_;
       pole_locked_state = pole_locked_state_;
+      left_radius = left_radius_;
+      right_radius = right_radius_;
     }
 
     QPainter painter(this);
@@ -289,19 +324,24 @@ protected:
     painter.setFont(sub_title_font);
     painter.drawText(QRect(28, 64, width() - 56, 42), Qt::AlignLeft | Qt::AlignVCenter, mode_text);
 
-    const QPointF left_center(width() * 0.30, height() * 0.58);
-    const QPointF right_center(width() * 0.74, height() * 0.58);
+    const bool show_pole_cards = (state_name == "POLE");
 
-    double left_radius = 140.0;
-    double right_radius = 115.0;
+    const double target_left_radius =
+      (lt_held && !submenu_active) ? 208.0 : (submenu_active ? 150.0 : 168.0);
+    const double target_right_radius =
+      submenu_active ? 188.0 : (lt_held ? 112.0 : 145.0);
 
-    if (lt_held && !submenu_active) {
-      left_radius = 185.0;
-      right_radius = 100.0;
-    } else if (submenu_active) {
-      left_radius = 130.0;
-      right_radius = 165.0;
+    left_radius = smoothApproach(left_radius, target_left_radius, 0.22);
+    right_radius = smoothApproach(right_radius, target_right_radius, 0.22);
+
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      left_radius_ = left_radius;
+      right_radius_ = right_radius;
     }
+
+    const QPointF left_center(width() * 0.30, show_pole_cards ? height() * 0.52 : height() * 0.56);
+    const QPointF right_center(width() * 0.74, show_pole_cards ? height() * 0.52 : height() * 0.56);
 
     drawWheel(
       painter, left_center, left_radius, left_labels, main_octant,
@@ -311,7 +351,9 @@ protected:
       painter, right_center, right_radius, right_labels, sub_octant,
       submenu_active, QColor(90, 122, 53), QColor(46, 79, 26), QColor(248, 252, 242));
 
-    drawPoleStatusCards(painter, selected_pole_id, pole_locked_state);
+    if (show_pole_cards) {
+      drawPoleStatusCards(painter, selected_pole_id, pole_locked_state);
+    }
   }
 
   void keyPressEvent(QKeyEvent * event) override
@@ -329,17 +371,17 @@ private:
     int selected_pole_id,
     const std::array<bool, 2> & pole_locked_state)
   {
-    const int card_width = 230;
-    const int card_height = 70;
-    const int gap = 18;
+    const int card_width = 280;
+    const int card_height = 86;
+    const int gap = 24;
     const int total_width = card_width * 2 + gap;
     const int origin_x = (width() - total_width) / 2;
-    const int origin_y = static_cast<int>(height() * 0.84);
+    const int origin_y = static_cast<int>(height() * 0.82);
 
     const std::array<QString, 2> names = {"LEFT", "RIGHT"};
 
-    QFont title_font("Noto Sans CJK SC", 12, QFont::Bold);
-    QFont status_font("Noto Sans CJK SC", 11, QFont::DemiBold);
+    QFont title_font("Noto Sans CJK SC", 14, QFont::Bold);
+    QFont status_font("Noto Sans CJK SC", 13, QFont::DemiBold);
 
     for (int i = 0; i < 2; ++i) {
       const QRect card_rect(origin_x + i * (card_width + gap), origin_y, card_width, card_height);
@@ -357,14 +399,14 @@ private:
       painter.setFont(title_font);
       painter.setPen(QColor(30, 48, 66));
       painter.drawText(
-        QRect(card_rect.x() + 12, card_rect.y() + 8, card_rect.width() - 24, 24),
+        QRect(card_rect.x() + 16, card_rect.y() + 10, card_rect.width() - 32, 30),
         Qt::AlignLeft | Qt::AlignVCenter,
         names[static_cast<size_t>(i)]);
 
       painter.setFont(status_font);
       painter.setPen(status);
       painter.drawText(
-        QRect(card_rect.x() + 12, card_rect.y() + 32, card_rect.width() - 24, 24),
+        QRect(card_rect.x() + 16, card_rect.y() + 44, card_rect.width() - 32, 30),
         Qt::AlignLeft | Qt::AlignVCenter,
         locked ? "Locked" : "Unlocked");
     }
@@ -389,11 +431,12 @@ private:
     painter.setBrush(fill_color);
     painter.drawEllipse(center, radius, radius);
 
-    QFont label_font("Noto Sans CJK SC", active ? 14 : 11, active ? QFont::Bold : QFont::DemiBold);
+    QFont label_font("Noto Sans CJK SC", active ? 13 : 11, active ? QFont::Bold : QFont::DemiBold);
     painter.setFont(label_font);
+    const QFontMetrics fm(label_font);
 
-    const double item_radius = radius * 0.18;
-    const double orbit = radius * 0.76;
+    const double item_radius = radius * 0.12;
+    const double orbit = radius * 0.78;
 
     for (int i = 0; i < kOctantCount; ++i) {
       const double angle_deg = static_cast<double>(i) * 45.0;
@@ -404,23 +447,34 @@ private:
 
       const bool is_selected = active && (i == selected_octant);
       QColor item_color = is_selected ? active_color : base_color;
-      item_color.setAlpha(is_selected ? 220 : 120);
+      item_color.setAlpha(is_selected ? 228 : 128);
       painter.setPen(Qt::NoPen);
       painter.setBrush(item_color);
       painter.drawEllipse(p, item_radius, item_radius);
 
-      painter.setPen(is_selected ? QColor(255, 255, 255) : QColor(14, 28, 44));
-      const QRectF text_rect(
-        p.x() - item_radius * 0.95,
-        p.y() - item_radius * 0.65,
-        item_radius * 1.9,
-        item_radius * 1.3);
-
       std::string text = "-";
       if (i >= 0 && i < static_cast<int>(labels.size())) {
-        text = labels[static_cast<size_t>(i)];
+        text = normalizeLabelForWrap(labels[static_cast<size_t>(i)]);
       }
-      painter.drawText(text_rect, Qt::AlignCenter, QString::fromStdString(text));
+
+      const QString text_q = QString::fromStdString(text);
+      const int min_w = static_cast<int>(radius * 0.36);
+      const int text_w = std::max(min_w, fm.horizontalAdvance(text_q) + 20);
+      const int text_h = static_cast<int>(radius * 0.19);
+      const QRect text_rect(
+        static_cast<int>(p.x() - text_w / 2.0),
+        static_cast<int>(p.y() - text_h / 2.0),
+        text_w,
+        text_h);
+
+      QColor text_bg = is_selected ? QColor(18, 41, 64, 235) : QColor(245, 250, 255, 216);
+      QColor text_border = is_selected ? QColor(205, 226, 250, 230) : QColor(143, 165, 186, 180);
+      painter.setBrush(text_bg);
+      painter.setPen(QPen(text_border, is_selected ? 1.8 : 1.1));
+      painter.drawRoundedRect(text_rect, 8.0, 8.0);
+
+      painter.setPen(is_selected ? QColor(255, 255, 255) : QColor(12, 28, 45));
+      painter.drawText(text_rect.adjusted(6, 2, -6, -2), Qt::AlignCenter | Qt::TextWordWrap, text_q);
     }
 
     painter.restore();
@@ -442,6 +496,8 @@ private:
   int sub_octant_ = 0;
   int selected_pole_id_ = 0;
   std::array<bool, 2> pole_locked_state_ = {false, false};
+  double left_radius_ = 168.0;
+  double right_radius_ = 145.0;
 
   std::vector<std::string> main_labels_ = {
     "ARM", "VISION_TASK", "CHASSIS", "POLE", "IDLE", "EMERGENCY", "CHASSIS", "ARM"};
