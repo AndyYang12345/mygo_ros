@@ -14,6 +14,7 @@
 #include "custom_interfaces/msg/arm_named_target.hpp"
 #include "custom_interfaces/msg/arm_pose_target.hpp"
 #include "custom_interfaces/msg/gripper_command.hpp"
+#include "custom_interfaces/msg/pole_command.hpp"
 #include "custom_interfaces/srv/set_mode.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -21,6 +22,7 @@
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/int32.hpp"
 #include "std_msgs/msg/string.hpp"
+#include "std_msgs/msg/u_int8.hpp"
 #include "trajectory_msgs/msg/joint_trajectory.hpp"
 
 class RobotStateMachineNode : public rclcpp::Node
@@ -35,7 +37,9 @@ public:
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr getChassisCmdPub();
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr getArmCmdPub();
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr getGripperCmdPub();
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr getPoleCmdPub();
+    rclcpp::Publisher<custom_interfaces::msg::PoleCommand>::SharedPtr getPoleRotatePub();
+    rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr getPoleSelectedIdPub();
+    rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr getPoleLockMaskPub();
     rclcpp::Publisher<custom_interfaces::msg::ArmNamedTarget>::SharedPtr getArmNamedTargetPub();
     rclcpp::Publisher<custom_interfaces::msg::ArmPoseTarget>::SharedPtr getArmPoseTargetPub();
     rclcpp::Publisher<custom_interfaces::msg::ArmJointTarget>::SharedPtr getArmJointTargetPub();
@@ -107,7 +111,9 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr chassis_cmd_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr arm_cmd_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr gripper_cmd_pub_;
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pole_cmd_pub_;
+    rclcpp::Publisher<custom_interfaces::msg::PoleCommand>::SharedPtr pole_rotate_pub_;
+    rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr pole_selected_id_pub_;
+    rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr pole_lock_mask_pub_;
     rclcpp::Publisher<custom_interfaces::msg::ArmNamedTarget>::SharedPtr arm_named_target_pub_;
     rclcpp::Publisher<custom_interfaces::msg::ArmPoseTarget>::SharedPtr arm_pose_target_pub_;
     rclcpp::Publisher<custom_interfaces::msg::ArmJointTarget>::SharedPtr arm_joint_target_pub_;

@@ -39,6 +39,20 @@ install(TARGETS chassis_serial_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
+add_executable(pole_serial_node
+  src/pole_serial_node.cpp
+  src/send_command.cpp
+  src/serial_port.cpp
+)
+target_include_directories(pole_serial_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
+target_compile_features(pole_serial_node PUBLIC c_std_99 cxx_std_17)
+
+install(TARGETS pole_serial_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 add_executable(arm_serial_node
   src/arm_serial_node.cpp
   src/send_command.cpp
@@ -85,6 +99,12 @@ ament_target_dependencies(arm_serial_node
   moveit_ros_planning_interface
   moveit_msgs
   tf2
+  custom_interfaces
+)
+
+ament_target_dependencies(pole_serial_node
+  rclcpp
+  std_msgs
   custom_interfaces
 )
 

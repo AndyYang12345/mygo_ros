@@ -23,6 +23,7 @@ set(msg_files
   "msg/ArmJointTarget.msg"
   "msg/ArmPoseTarget.msg"
   "msg/GripperCommand.msg"
+  "msg/PoleCommand.msg"
 )
 
 set(srv_files

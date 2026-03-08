@@ -22,6 +22,7 @@
 #include "custom_interfaces/msg/robot_state.hpp"
 #include "custom_interfaces/msg/trigger_intent.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/u_int8.hpp"
 
 namespace {
 constexpr float kPi = 3.14159265358979323846F;
@@ -166,6 +167,11 @@ public:
       submode_name_.clear();
     }
 
+    if (state_name_ == "POLE") {
+      const uint8_t sub = static_cast<uint8_t>(sub_state_ & 0xFF);
+      selected_pole_id_ = static_cast<int>(sub & 0x01U);
+    }
+
     if (lt_held_) {
       main_octant_ = angleToOctant(joy_x_, joy_y_);
     }
@@ -215,6 +221,19 @@ public:
     }
   }
 
+  void updatePoleSelectedId(uint8_t selected_id)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    selected_pole_id_ = (selected_id == 0U) ? 0 : 1;
+  }
+
+  void updatePoleLockMask(uint8_t lock_mask)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    pole_locked_state_[0] = (lock_mask & 0x01U) != 0U;
+    pole_locked_state_[1] = (lock_mask & 0x02U) != 0U;
+  }
+
 protected:
   void paintEvent(QPaintEvent * event) override
   {
@@ -228,6 +247,8 @@ protected:
     bool submenu_active = false;
     int main_octant = 0;
     int sub_octant = 0;
+    int selected_pole_id = 0;
+    std::array<bool, 2> pole_locked_state = {false, false};
 
     {
       std::lock_guard<std::mutex> lock(mutex_);
@@ -239,6 +260,8 @@ protected:
       submenu_active = submenu_active_;
       main_octant = main_octant_;
       sub_octant = sub_octant_;
+      selected_pole_id = selected_pole_id_;
+      pole_locked_state = pole_locked_state_;
     }
 
     QPainter painter(this);
@@ -287,6 +310,8 @@ protected:
     drawWheel(
       painter, right_center, right_radius, right_labels, sub_octant,
       submenu_active, QColor(90, 122, 53), QColor(46, 79, 26), QColor(248, 252, 242));
+
+    drawPoleStatusCards(painter, selected_pole_id, pole_locked_state);
   }
 
   void keyPressEvent(QKeyEvent * event) override
@@ -299,6 +324,52 @@ protected:
   }
 
 private:
+  void drawPoleStatusCards(
+    QPainter & painter,
+    int selected_pole_id,
+    const std::array<bool, 2> & pole_locked_state)
+  {
+    const int card_width = 230;
+    const int card_height = 70;
+    const int gap = 18;
+    const int total_width = card_width * 2 + gap;
+    const int origin_x = (width() - total_width) / 2;
+    const int origin_y = static_cast<int>(height() * 0.84);
+
+    const std::array<QString, 2> names = {"LEFT", "RIGHT"};
+
+    QFont title_font("Noto Sans CJK SC", 12, QFont::Bold);
+    QFont status_font("Noto Sans CJK SC", 11, QFont::DemiBold);
+
+    for (int i = 0; i < 2; ++i) {
+      const QRect card_rect(origin_x + i * (card_width + gap), origin_y, card_width, card_height);
+      const bool selected = (i == selected_pole_id);
+      const bool locked = pole_locked_state[static_cast<size_t>(i)];
+
+      const QColor bg = selected ? QColor(226, 238, 255) : QColor(240, 245, 250);
+      const QColor border = selected ? QColor(35, 89, 144) : QColor(155, 172, 188);
+      const QColor status = locked ? QColor(188, 47, 47) : QColor(33, 128, 66);
+
+      painter.setPen(QPen(border, selected ? 2.8 : 1.6));
+      painter.setBrush(bg);
+      painter.drawRoundedRect(card_rect, 12.0, 12.0);
+
+      painter.setFont(title_font);
+      painter.setPen(QColor(30, 48, 66));
+      painter.drawText(
+        QRect(card_rect.x() + 12, card_rect.y() + 8, card_rect.width() - 24, 24),
+        Qt::AlignLeft | Qt::AlignVCenter,
+        names[static_cast<size_t>(i)]);
+
+      painter.setFont(status_font);
+      painter.setPen(status);
+      painter.drawText(
+        QRect(card_rect.x() + 12, card_rect.y() + 32, card_rect.width() - 24, 24),
+        Qt::AlignLeft | Qt::AlignVCenter,
+        locked ? "Locked" : "Unlocked");
+    }
+  }
+
   void drawWheel(
     QPainter & painter,
     const QPointF & center,
@@ -369,6 +440,8 @@ private:
 
   int main_octant_ = 0;
   int sub_octant_ = 0;
+  int selected_pole_id_ = 0;
+  std::array<bool, 2> pole_locked_state_ = {false, false};
 
   std::vector<std::string> main_labels_ = {
     "ARM", "VISION_TASK", "CHASSIS", "POLE", "IDLE", "EMERGENCY", "CHASSIS", "ARM"};
@@ -442,6 +515,26 @@ public:
         widget_->updateRightJoystick(msg->x, msg->y);
       });
 
+    pole_selected_id_sub_ = create_subscription<std_msgs::msg::UInt8>(
+      "/cmd/pole/selected_id", 10,
+      [this](const std_msgs::msg::UInt8::SharedPtr msg)
+      {
+        if (!msg || !widget_) {
+          return;
+        }
+        widget_->updatePoleSelectedId(msg->data);
+      });
+
+    pole_lock_mask_sub_ = create_subscription<std_msgs::msg::UInt8>(
+      "/cmd/pole/lock_mask", 10,
+      [this](const std_msgs::msg::UInt8::SharedPtr msg)
+      {
+        if (!msg || !widget_) {
+          return;
+        }
+        widget_->updatePoleLockMask(msg->data);
+      });
+
     RCLCPP_INFO(get_logger(), "menu_ui_node started.");
   }
 
@@ -451,6 +544,8 @@ private:
   rclcpp::Subscription<custom_interfaces::msg::TriggerIntent>::SharedPtr trigger_sub_;
   rclcpp::Subscription<custom_interfaces::msg::ButtonIntent>::SharedPtr button_sub_;
   rclcpp::Subscription<custom_interfaces::msg::JoystickIntent>::SharedPtr joystick_sub_;
+  rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr pole_selected_id_sub_;
+  rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr pole_lock_mask_sub_;
 };
 
 int main(int argc, char ** argv)

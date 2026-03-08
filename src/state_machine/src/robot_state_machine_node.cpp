@@ -115,9 +115,20 @@ rclcpp::Publisher<std_msgs::msg::String>::SharedPtr RobotStateMachineNode::getGr
     return gripper_cmd_pub_;
 }
 
-rclcpp::Publisher<std_msgs::msg::String>::SharedPtr RobotStateMachineNode::getPoleCmdPub()
+rclcpp::Publisher<custom_interfaces::msg::PoleCommand>::SharedPtr
+RobotStateMachineNode::getPoleRotatePub()
 {
-    return pole_cmd_pub_;
+    return pole_rotate_pub_;
+}
+
+rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr RobotStateMachineNode::getPoleSelectedIdPub()
+{
+    return pole_selected_id_pub_;
+}
+
+rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr RobotStateMachineNode::getPoleLockMaskPub()
+{
+    return pole_lock_mask_pub_;
 }
 
 rclcpp::Publisher<custom_interfaces::msg::ArmNamedTarget>::SharedPtr
@@ -241,7 +252,12 @@ void RobotStateMachineNode::setupPublishers()
     chassis_cmd_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd/chassis/velocity", 10);
     arm_cmd_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd/arm/velocity", 10);
     gripper_cmd_pub_ = this->create_publisher<std_msgs::msg::String>("/cmd/gripper/action", 10);
-    pole_cmd_pub_ = this->create_publisher<std_msgs::msg::String>("/cmd/pole/action", 10);
+    pole_rotate_pub_ =
+        this->create_publisher<custom_interfaces::msg::PoleCommand>("/cmd/pole/rotate", 10);
+    pole_selected_id_pub_ =
+        this->create_publisher<std_msgs::msg::UInt8>("/cmd/pole/selected_id", 10);
+    pole_lock_mask_pub_ =
+        this->create_publisher<std_msgs::msg::UInt8>("/cmd/pole/lock_mask", 10);
     arm_named_target_pub_ =
         this->create_publisher<custom_interfaces::msg::ArmNamedTarget>("/cmd/arm/named_target", 10);
     arm_pose_target_pub_ =
@@ -459,7 +475,8 @@ void RobotStateMachineNode::sendStopCommands()
     arm_gripper_stop.open = true;
     arm_gripper_cmd_pub_->publish(arm_gripper_stop);
 
-    auto pole_stop = std_msgs::msg::String();
-    pole_stop.data = "STOP";
-    pole_cmd_pub_->publish(pole_stop);
+    auto pole_stop = custom_interfaces::msg::PoleCommand();
+    pole_stop.id = false;
+    pole_stop.delta = 0.0F;
+    pole_rotate_pub_->publish(pole_stop);
 }
