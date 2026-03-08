@@ -37,10 +37,12 @@ public:
 		const auto mode_name = this->declare_parameter<std::string>("mode_name", "ARM");
 		arm_group_name_ = this->declare_parameter<std::string>("arm_group", "arm");
 		gripper_group_name_ = this->declare_parameter<std::string>("gripper_group", "gripper");
-		use_moveit_mode_ = this->declare_parameter<bool>("use_moveit_mode", true);
+		use_moveit_mode_ = false;
 		min_segment_time_ms_ = this->declare_parameter<int>("min_segment_time_ms", 20);
 		gripper_motion_time_ms_ = this->declare_parameter<int>("gripper_motion_time_ms", 1000);
 		direct_joint_time_ms_ = this->declare_parameter<int>("direct_joint_time_ms", 1000);
+		gripper_open_degree_ = this->declare_parameter<double>("gripper_open_degree", 180.0);
+		gripper_close_degree_ = this->declare_parameter<double>("gripper_close_degree", 0.0);
 		arm_joint_names_ = this->declare_parameter<std::vector<std::string>>(
 			"arm_joint_names",
 			std::vector<std::string>{});
@@ -64,29 +66,12 @@ public:
 				cfg.baudrate);
 		}
 
-		if (use_moveit_mode_) {
-			moveit_init_timer_ = this->create_wall_timer(
-				std::chrono::milliseconds(50),
-				std::bind(&ArmSerialNode::initializeMoveGroups, this));
-			RCLCPP_INFO(this->get_logger(), "Control mode: MoveIt planning.");
-		} else {
-			RCLCPP_WARN(this->get_logger(), "Control mode: Direct joint command (MoveIt disabled).");
-		}
-
-		named_target_sub_ = this->create_subscription<ArmNamedTarget>(
-			"/cmd/arm/named_target",
-			10,
-			std::bind(&ArmSerialNode::namedTargetCallback, this, std::placeholders::_1));
+		RCLCPP_INFO(this->get_logger(), "Control mode: Direct joint command (MoveIt planned upstream).");
 
 		joint_target_sub_ = this->create_subscription<ArmJointTarget>(
 			"/cmd/arm/joint_target",
 			10,
 			std::bind(&ArmSerialNode::jointTargetCallback, this, std::placeholders::_1));
-
-		pose_target_sub_ = this->create_subscription<ArmPoseTarget>(
-			"/cmd/arm/pose_target",
-			10,
-			std::bind(&ArmSerialNode::poseTargetCallback, this, std::placeholders::_1));
 
 		gripper_sub_ = this->create_subscription<GripperCommand>(
 			"/cmd/arm/gripper",
@@ -121,7 +106,7 @@ private:
 			 << 'P'
 			 << std::setw(4) << std::setfill('0') << pwm
 			 << 'T'
-			 << std::setw(4) << std::setfill('0') << std::max(duration_ms, min_segment_time_ms_)
+			 << std::setw(4) << std::setfill('0') << std::max(duration_ms, min_segment_time_ms_)/5
 			 << '!';
         RCLCPP_INFO(this->get_logger(), "Formatted servo command: %s", ss.str().c_str());
 		return ss.str();
@@ -460,17 +445,16 @@ private:
 
 	void gripperCallback(const GripperCommand::SharedPtr msg)
 	{
-		if (!use_moveit_mode_) {
-			RCLCPP_WARN(this->get_logger(), "gripper command via MoveIt is disabled in direct mode.");
+		if (!sender_ || !sender_->is_ready()) {
+			RCLCPP_WARN(this->get_logger(), "Serial sender not ready, gripper command skipped.");
 			return;
 		}
-		if (!ensureMoveItReady()) {
-			return;
-		}
-		if (msg->open) {
-			planAndSendGripper("open");
-		} else {
-			planAndSendGripper("close");
+
+		const double degree = msg->open ? gripper_open_degree_ : gripper_close_degree_;
+		const int pwm = angleDegreeToPwm(degree);
+		const auto payload = formatServoCommand(kGripperServoId, pwm, gripper_motion_time_ms_);
+		if (!sender_->send(payload)) {
+			RCLCPP_ERROR(this->get_logger(), "Failed to send direct gripper payload: %s", payload.c_str());
 		}
 	}
 
@@ -480,6 +464,8 @@ private:
 	int min_segment_time_ms_;
 	int gripper_motion_time_ms_;
 	int direct_joint_time_ms_;
+	double gripper_open_degree_;
+	double gripper_close_degree_;
 	std::vector<std::string> arm_joint_names_;
 
 	std::unique_ptr<SendCommand> sender_;
@@ -491,9 +477,7 @@ private:
 	std::shared_ptr<MoveGroupInterface> arm_;
 	std::shared_ptr<MoveGroupInterface> gripper_;
 
-	rclcpp::Subscription<ArmNamedTarget>::SharedPtr named_target_sub_;
 	rclcpp::Subscription<ArmJointTarget>::SharedPtr joint_target_sub_;
-	rclcpp::Subscription<ArmPoseTarget>::SharedPtr pose_target_sub_;
 	rclcpp::Subscription<GripperCommand>::SharedPtr gripper_sub_;
 };
 

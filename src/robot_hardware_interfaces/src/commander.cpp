@@ -6,11 +6,14 @@
 #include <custom_interfaces/msg/arm_joint_target.hpp>
 #include <custom_interfaces/msg/gripper_command.hpp>
 #include <trajectory_msgs/msg/joint_trajectory.hpp>
+#include <tf2/LinearMath/Quaternion.h>
 
 #include <algorithm>
 #include <chrono>
+#include <map>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 
 using Float64MultiArray = example_interfaces::msg::Float64MultiArray;
 using ArmNamedTarget = custom_interfaces::msg::ArmNamedTarget;
@@ -54,12 +57,21 @@ public:
             "/cmd/arm/joint_target",
             10
         );
+
+        buildPrecomputedTrajectories();
     }
 
     void goToNamedTarget(const std::string &target_name){
+        if (executePrecomputedNamedTarget(target_name)) {
+            RCLCPP_INFO(node_->get_logger(), "Executed precomputed trajectory to named target: %s", target_name.c_str());
+            last_named_target_ = target_name;
+            return;
+        }
+
         arm_->setStartStateToCurrentState();
         arm_->setNamedTarget(target_name);
         planAndExecute(arm_);
+        last_named_target_ = target_name;
     }
 
     void goToJointTarget(const std::vector<double> &joints){
@@ -68,22 +80,40 @@ public:
         planAndExecute(arm_);
     }
 
-    void goToPoseTarget(double x, double y, double z, double pitch, double roll, double yaw, bool cartesian_path = false){
-        geometry_msgs::msg::Pose pose;
-        tf2::Quaternion q;
-        q.setRPY(roll, pitch, yaw);
-        q = q.normalize();
-        pose.position.x = x;
-        pose.position.y = y;
-        pose.position.z = z;
-        pose.orientation.x = q.x();
-        pose.orientation.y = q.y();
-        pose.orientation.z = q.z();
-        pose.orientation.w = q.w();
+    void goToPoseTarget(double x, double y, double z, double roll, double pitch, double yaw, bool cartesian_path = false){
+        // Treat incoming pose_target as a delta from current end-effector pose.
+        const auto current_pose = arm_->getCurrentPose().pose;
+        geometry_msgs::msg::Pose pose = current_pose;
+
+        pose.position.x += x;
+        pose.position.y += y;
+        pose.position.z += z;
+
+        tf2::Quaternion q_current(
+            current_pose.orientation.x,
+            current_pose.orientation.y,
+            current_pose.orientation.z,
+            current_pose.orientation.w);
+        tf2::Quaternion q_delta;
+        q_delta.setRPY(roll, pitch, yaw);
+        tf2::Quaternion q_target = q_current * q_delta;
+        q_target.normalize();
+        pose.orientation.x = q_target.x();
+        pose.orientation.y = q_target.y();
+        pose.orientation.z = q_target.z();
+        pose.orientation.w = q_target.w();
 
         arm_->setStartStateToCurrentState();
         if (!cartesian_path) {
-            arm_->setPoseTarget(pose);
+            arm_->clearPoseTargets();
+            const bool target_ok = arm_->setPoseTarget(pose);
+            if (!target_ok) {
+                RCLCPP_ERROR(
+                    node_->get_logger(),
+                    "Failed to set pose delta target: dx=%.3f dy=%.3f dz=%.3f dr=%.3f dp=%.3f dy=%.3f",
+                    x, y, z, roll, pitch, yaw);
+                return;
+            }
             planAndExecute(arm_);
         }else{
             std::vector<geometry_msgs::msg::Pose> waypoints;
@@ -109,6 +139,71 @@ public:
         planAndExecute(gripper_);
     }
 private:
+
+    struct PrecomputedTrajectory
+    {
+        std::vector<std::vector<double>> points;
+        std::vector<int> durations_ms;
+    };
+
+    using NamedTargetPair = std::pair<std::string, std::string>;
+
+    static NamedTargetPair makePairKey(const std::string &from, const std::string &to)
+    {
+        return std::make_pair(from, to);
+    }
+
+    void buildPrecomputedTrajectories()
+    {
+        const std::vector<double> home = {0.0, 0.0, 0.0, 0.0, 0.0};
+        const std::vector<double> pose1 = {0.9199, -1.0804, 1.2366, 0.8461, -1.0544};
+        const std::vector<double> pose2 = {2.0654, -1.1065, 0.3254, 1.0804, -0.6639};
+
+        precomputed_named_target_trajectories_[makePairKey("home", "pose_1")] = PrecomputedTrajectory{{pose1}, {900}};
+        precomputed_named_target_trajectories_[makePairKey("home", "pose_2")] = PrecomputedTrajectory{{pose2}, {900}};
+        precomputed_named_target_trajectories_[makePairKey("pose_1", "home")] = PrecomputedTrajectory{{home}, {900}};
+        precomputed_named_target_trajectories_[makePairKey("pose_2", "home")] = PrecomputedTrajectory{{home}, {900}};
+        precomputed_named_target_trajectories_[makePairKey("pose_1", "pose_2")] = PrecomputedTrajectory{{home, pose2}, {700, 900}};
+        precomputed_named_target_trajectories_[makePairKey("pose_2", "pose_1")] = PrecomputedTrajectory{{home, pose1}, {700, 900}};
+
+        precomputed_named_target_trajectories_[makePairKey("ANY", "home")] = PrecomputedTrajectory{{home}, {900}};
+        precomputed_named_target_trajectories_[makePairKey("ANY", "pose_1")] = PrecomputedTrajectory{{pose1}, {900}};
+        precomputed_named_target_trajectories_[makePairKey("ANY", "pose_2")] = PrecomputedTrajectory{{pose2}, {900}};
+    }
+
+    bool executePrecomputedNamedTarget(const std::string &target_name)
+    {
+        const auto from = last_named_target_.empty() ? std::string("ANY") : last_named_target_;
+
+        auto it = precomputed_named_target_trajectories_.find(makePairKey(from, target_name));
+        if (it == precomputed_named_target_trajectories_.end()) {
+            it = precomputed_named_target_trajectories_.find(makePairKey("ANY", target_name));
+            if (it == precomputed_named_target_trajectories_.end()) {
+                return false;
+            }
+        }
+
+        const auto &traj = it->second;
+        if (traj.points.empty() || traj.points.size() != traj.durations_ms.size()) {
+            RCLCPP_ERROR(node_->get_logger(), "Invalid precomputed trajectory definition for target: %s", target_name.c_str());
+            return false;
+        }
+
+        for (size_t i = 0; i < traj.points.size(); ++i) {
+            const auto &pt = traj.points[i];
+            if (pt.size() != 5) {
+                RCLCPP_ERROR(node_->get_logger(), "Precomputed point size invalid (expected 5, got %zu)", pt.size());
+                return false;
+            }
+
+            ArmJointTarget msg;
+            msg.joints = pt;
+            arm_joint_target_pub_->publish(msg);
+            std::this_thread::sleep_for(std::chrono::milliseconds(std::max(traj.durations_ms[i], 20)));
+        }
+
+        return true;
+    }
 
     bool publishArmTrajectory(const trajectory_msgs::msg::JointTrajectory &trajectory){
         if (trajectory.points.empty()) {
@@ -191,27 +286,54 @@ private:
     rclcpp::Subscription<ArmPoseTarget>::SharedPtr pose_cmd_sub_;
     rclcpp::Publisher<ArmJointTarget>::SharedPtr arm_joint_target_pub_;
 
-    void namedTargetCallback(const ArmNamedTarget &msg){
-        goToNamedTarget(msg.target_name);
+    std::string last_named_target_ = "home";
+    std::map<NamedTargetPair, PrecomputedTrajectory> precomputed_named_target_trajectories_;
+
+    void namedTargetCallback(const ArmNamedTarget::SharedPtr msg){
+        if (!msg) {
+            return;
+        }
+        goToNamedTarget(msg->target_name);
     }
 
-    void openGripperCallback(const GripperCommand &msg){
-        if (msg.open) {
+    void openGripperCallback(const GripperCommand::SharedPtr msg){
+        if (!msg) {
+            return;
+        }
+        if (msg->open) {
             openGripper();
         } else {
             closeGripper();
         }
     }
-    void jointCmdCallback(const Float64MultiArray &msg){
-        auto joints = msg.data;
+    void jointCmdCallback(const Float64MultiArray::SharedPtr msg){
+        if (!msg) {
+            return;
+        }
+        auto joints = msg->data;
         if (joints.size() == 5) {
             goToJointTarget(joints);
         } else {
             RCLCPP_ERROR(node_->get_logger(), "Received joint command with incorrect size: %zu (expected 5)", joints.size());
         }
     }   
-    void poseCmdCallback(const ArmPoseTarget &msg){
-        goToPoseTarget(msg.x, msg.y, msg.z, msg.roll, msg.pitch, msg.yaw, msg.cartesian_path);
+    void poseCmdCallback(const ArmPoseTarget::SharedPtr msg){
+        if (!msg) {
+            return;
+        }
+        RCLCPP_INFO_THROTTLE(
+            node_->get_logger(),
+            *node_->get_clock(),
+            1000,
+            "Received pose_target: x=%.3f y=%.3f z=%.3f r=%.3f p=%.3f y=%.3f cartesian=%s",
+            msg->x,
+            msg->y,
+            msg->z,
+            msg->roll,
+            msg->pitch,
+            msg->yaw,
+            msg->cartesian_path ? "true" : "false");
+        goToPoseTarget(msg->x, msg->y, msg->z, msg->roll, msg->pitch, msg->yaw, msg->cartesian_path);
     }
 };
 

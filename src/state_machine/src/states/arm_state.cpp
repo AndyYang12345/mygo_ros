@@ -3,12 +3,11 @@
 #include <cmath>
 
 #include "custom_interfaces/msg/arm_named_target.hpp"
-#include "custom_interfaces/msg/arm_pose_target.hpp"
 #include "custom_interfaces/msg/gripper_command.hpp"
 #include "state_machine/robot_state_machine_node.hpp"
 
 namespace {
-constexpr float kPiFloat = 3.14159265358979323846F;
+constexpr float kPi = 3.14159265358979323846F;
 const char *kOctantNames[8] = {
     "RIGHT", "UP_RIGHT", "UP", "UP_LEFT", "LEFT", "DOWN_LEFT", "DOWN", "DOWN_RIGHT"};
 }
@@ -98,9 +97,9 @@ void ArmState::handleJoystick(
         {
             const float x = msg->x;
             const float y = msg->y;
-            const float deadzone = 0.25F;
+            const float submenu_deadzone = 0.25F;
             const float radius = std::sqrt(x * x + y * y);
-            if (radius >= deadzone)
+            if (radius >= submenu_deadzone)
             {
                 const int octant = angleToOctant(x, y);
                 if (octant != submenu_selection_)
@@ -111,7 +110,7 @@ void ArmState::handleJoystick(
                     const float norm_x = -x;
                     const float norm_y = y;
                     const float angle_rad = std::atan2(norm_y, norm_x);
-                    const float angle_deg = angle_rad * 180.0F / kPiFloat;
+                    const float angle_deg = angle_rad * 180.0F / kPi;
 
                     std::string mapped_target = "home";
                     if (submenu_selection_ >= 0 && submenu_selection_ < static_cast<int>(named_target_map_.size()))
@@ -133,10 +132,7 @@ void ArmState::handleJoystick(
         }
     }
 
-    // Disable joystick-based pose control in ARM mode when serial node runs in direct mode.
-    // Keep joystick input only for submenu selection above.
     (void)context;
-    return;
 }
 
 void ArmState::handleTrigger(
@@ -163,6 +159,11 @@ void ArmState::handleCombo(
 
 void ArmState::update(RobotStateMachineNode *context)
 {
+    if (submenu_active_)
+    {
+        return;
+    }
+
     (void)context;
 }
 
@@ -198,20 +199,3 @@ int ArmState::angleToOctant(float x, float y) const
     return octant;
 }
 
-double ArmState::applyDeadzone(double value, double deadzone) const
-{
-    return std::abs(value) < deadzone ? 0.0 : value;
-}
-
-void ArmState::publishPoseTarget(RobotStateMachineNode *context)
-{
-    auto pose_cmd = custom_interfaces::msg::ArmPoseTarget();
-    pose_cmd.x = cmd_x_;
-    pose_cmd.y = cmd_y_;
-    pose_cmd.z = cmd_z_;
-    pose_cmd.roll = cmd_roll_;
-    pose_cmd.pitch = cmd_pitch_;
-    pose_cmd.yaw = cmd_yaw_;
-    pose_cmd.cartesian_path = false;
-    context->getArmPoseTargetPub()->publish(pose_cmd);
-}

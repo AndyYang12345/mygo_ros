@@ -12,6 +12,7 @@ find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(custom_interfaces REQUIRED)
+find_package(Qt5 REQUIRED COMPONENTS Widgets)
 
 add_executable(state_machine
   src/state_machine.cpp
@@ -27,6 +28,10 @@ add_executable(state_machine
 
 add_executable(arm_joint_servo_test_node
   src/arm_joint_servo_test_node.cpp
+)
+
+add_executable(menu_ui_node
+  src/menu_ui_node.cpp
 )
 target_include_directories(state_machine PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -46,11 +51,24 @@ ament_target_dependencies(arm_joint_servo_test_node
   custom_interfaces
 )
 
+ament_target_dependencies(menu_ui_node
+  rclcpp
+  custom_interfaces
+)
+
+target_link_libraries(menu_ui_node
+  Qt5::Widgets
+)
+
 install(TARGETS state_machine
   DESTINATION lib/${PROJECT_NAME}
 )
 
 install(TARGETS arm_joint_servo_test_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(TARGETS menu_ui_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

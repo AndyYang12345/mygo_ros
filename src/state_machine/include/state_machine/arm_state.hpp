@@ -32,8 +32,6 @@ public:
 private:
   void updateSubmenuUi(RobotStateMachineNode * context);
   int angleToOctant(float x, float y) const;
-  double applyDeadzone(double value, double deadzone) const;
-  void publishPoseTarget(RobotStateMachineNode * context);
 
   std::vector<std::string> presets_ = {
     "home",
@@ -61,14 +59,4 @@ private:
 
   bool submenu_active_ = false;
   int submenu_selection_ = 0;
-
-  double cmd_x_ = 0.0;
-  double cmd_y_ = 0.0;
-  double cmd_z_ = 0.0;
-  double cmd_roll_ = 0.0;
-  double cmd_pitch_ = 0.0;
-  double cmd_yaw_ = 0.0;
-
-  static constexpr double kPi = 3.14159265358979323846;
-  static constexpr double kPitchStepRad = 0.05;
 };

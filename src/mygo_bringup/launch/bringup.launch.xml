@@ -2,4 +2,5 @@
   <node pkg="joy" exec="joy_node" name="joy_node" output="screen" />
   <node pkg="joystick_parser" exec="joystick_parser" name="joystick_parser" output="screen" />
   <node pkg="state_machine" exec="state_machine" name="robot_state_machine" output="screen" />
+  <node pkg="robot_hardware_interfaces" exec="chassis_serial_node" name="chassis_serial_node" output="screen" />
 </launch>

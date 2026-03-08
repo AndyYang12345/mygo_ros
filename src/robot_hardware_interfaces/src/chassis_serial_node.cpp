@@ -71,6 +71,7 @@ private:
 
     void send_to_chassis_driver(double left_speed, double right_speed)
     {
+        RCLCPP_INFO(this->get_logger(), "Sending chassis cmd: left=%.3f, right=%.3f", left_speed, right_speed);
         if (!sender_ || !sender_->is_ready())
         {
             RCLCPP_WARN_THROTTLE(
@@ -83,9 +84,11 @@ private:
 
         std::ostringstream ss;
         ss << std::fixed << std::setprecision(3)
-           << "#" << left_speed << "," << right_speed << "\n";
+           << "#" << left_speed << "," << right_speed << "!";
 
         const auto payload = ss.str();
+        // RCLCPP_INFO(this->get_logger(), "Sending chassis cmd: left=%.3f, right=%.3f, payload=%s",
+        //             left_speed, right_speed, payload.c_str());
         if (!sender_->send(payload))
         {
             RCLCPP_ERROR_THROTTLE(
