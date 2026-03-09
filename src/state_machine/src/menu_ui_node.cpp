@@ -62,8 +62,8 @@ std::vector<std::string> subModesForMainMode(const std::string & main_mode)
 {
   if (main_mode == "ARM") {
     return {
-      "home", "normal_detection", "pickup_left", "pickup_right",
-      "cylinder_left", "cylinder_right", "box_left", "box_right"};
+      "pickup_right", "cylinder_right", "home", "cylinder_left",
+      "pickup_left", "box_left", "normal_detection", "box_right"};
   }
 
   if (main_mode == "CHASSIS") {

@@ -45,9 +45,9 @@ void ArmState::handleButton(
         {
             submenu_active_ = false;
             auto target = custom_interfaces::msg::ArmNamedTarget();
-            if (submenu_selection_ >= 0 && submenu_selection_ < static_cast<int>(named_target_map_.size()))
+            if (submenu_selection_ >= 0 && submenu_selection_ < static_cast<int>(presets_.size()))
             {
-                target.target_name = named_target_map_[submenu_selection_];
+                target.target_name = presets_[submenu_selection_];
             }
             else
             {
@@ -113,9 +113,9 @@ void ArmState::handleJoystick(
                     const float angle_deg = angle_rad * 180.0F / kPi;
 
                     std::string mapped_target = "home";
-                    if (submenu_selection_ >= 0 && submenu_selection_ < static_cast<int>(named_target_map_.size()))
+                    if (submenu_selection_ >= 0 && submenu_selection_ < static_cast<int>(presets_.size()))
                     {
-                        mapped_target = named_target_map_[submenu_selection_];
+                        mapped_target = presets_[submenu_selection_];
                     }
 
                     RCLCPP_INFO(

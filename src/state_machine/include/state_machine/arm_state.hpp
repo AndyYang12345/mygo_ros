@@ -33,28 +33,19 @@ private:
   void updateSubmenuUi(RobotStateMachineNode * context);
   int angleToOctant(float x, float y) const;
 
+  // Index order follows octants: RIGHT, UP_RIGHT, UP, UP_LEFT, LEFT, DOWN_LEFT, DOWN, DOWN_RIGHT.
+  // Left/right variants are mirrored around the vertical axis for intuitive selection.
   std::vector<std::string> presets_ = {
-    "home",
-    "normal_detection",
-    "pickup_left",
     "pickup_right",
-    "cylinder_left",
-    "cylinder_right",
+    // "cylinder_right",
+    "pose_1",
+    "home",
+    // "cylinder_left",
+    "pose_2",
+    "pickup_left",
     "box_left",
+    "normal_detection",
     "box_right"
-  };
-
-  // Map 8-direction submenu selections to valid MoveIt named targets.
-  // mygo.srdf currently provides: home, pose_1, pose_2.
-  std::vector<std::string> named_target_map_ = {
-    "home",
-    "pose_1",
-    "pose_2",
-    "pose_1",
-    "home",
-    "pose_2",
-    "pose_1",
-    "home"
   };
 
   bool submenu_active_ = false;
