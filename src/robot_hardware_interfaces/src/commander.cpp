@@ -27,6 +27,10 @@ public:
         arm_ = std::make_shared<MoveGroupInterface>(node_, "arm");
         arm_->setMaxVelocityScalingFactor(1.0);
         arm_->setMaxAccelerationScalingFactor(1.0);
+        arm_->setPlanningTime(10.0);
+        arm_->setNumPlanningAttempts(10);
+        arm_->setGoalPositionTolerance(0.01);
+        arm_->setGoalOrientationTolerance(0.2);
 
         gripper_ = std::make_shared<MoveGroupInterface>(node_, "gripper");
 
@@ -73,43 +77,22 @@ public:
         double pitch,
         double yaw,
         bool cartesian_path = false) {
-        const auto current_pose = arm_->getCurrentPose().pose;
-        geometry_msgs::msg::Pose pose = current_pose;
+        geometry_msgs::msg::Pose pose;
+        tf2::Quaternion q;
+        q.setRPY(roll, pitch, yaw);
+        q.normalize();
 
-        pose.position.x += x;
-        pose.position.y += y;
-        pose.position.z += z;
-
-        tf2::Quaternion q_current(
-            current_pose.orientation.x,
-            current_pose.orientation.y,
-            current_pose.orientation.z,
-            current_pose.orientation.w);
-        tf2::Quaternion q_delta;
-        q_delta.setRPY(roll, pitch, yaw);
-        tf2::Quaternion q_target = q_current * q_delta;
-        q_target.normalize();
-        pose.orientation.x = q_target.x();
-        pose.orientation.y = q_target.y();
-        pose.orientation.z = q_target.z();
-        pose.orientation.w = q_target.w();
+        pose.position.x = x;
+        pose.position.y = y;
+        pose.position.z = z;
+        pose.orientation.x = q.x();
+        pose.orientation.y = q.y();
+        pose.orientation.z = q.z();
+        pose.orientation.w = q.w();
 
         arm_->setStartStateToCurrentState();
         if (!cartesian_path) {
-            arm_->clearPoseTargets();
-            const bool target_ok = arm_->setPoseTarget(pose);
-            if (!target_ok) {
-                RCLCPP_ERROR(
-                    node_->get_logger(),
-                    "Failed to set pose delta target: dx=%.3f dy=%.3f dz=%.3f dr=%.3f dp=%.3f dy=%.3f",
-                    x,
-                    y,
-                    z,
-                    roll,
-                    pitch,
-                    yaw);
-                return;
-            }
+            arm_->setPoseTarget(pose);
             planAndExecute(arm_);
         } else {
             std::vector<geometry_msgs::msg::Pose> waypoints;
@@ -121,6 +104,8 @@ public:
                     RCLCPP_WARN(node_->get_logger(), "Failed to publish cartesian trajectory to /cmd/arm/joint_target.");
                 }
                 arm_->execute(trajectory);
+            } else {
+                RCLCPP_ERROR(node_->get_logger(), "Cartesian planning failed. fraction=%.3f", fraction);
             }
         }
     }

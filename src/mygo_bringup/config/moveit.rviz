@@ -1,12 +1,13 @@
 Panels:
   - Class: rviz_common/Displays
-    Help Height: 70
+    Help Height: 0
     Name: Displays
     Property Tree Widget:
       Expanded:
         - /MotionPlanning1
+        - /MotionPlanning1/Planned Path1
       Splitter Ratio: 0.5
-    Tree Height: 70
+    Tree Height: 150
   - Class: rviz_common/Help
     Name: Help
   - Class: rviz_common/Views
@@ -106,7 +107,7 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
-        Loop Animation: true
+        Loop Animation: false
         Robot Alpha: 0.5
         Robot Color: 150; 50; 150
         Show Robot Collision: false
@@ -197,6 +198,47 @@ Visualization Manager:
         Show Robot Visual: true
       Value: true
       Velocity_Scaling_Factor: 1
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Filter (blacklist): ""
+      Filter (whitelist): ""
+      Frame Timeout: 15
+      Frames:
+        All Enabled: true
+        base_link:
+          Value: true
+        end_link1:
+          Value: true
+        end_link2:
+          Value: true
+        link1:
+          Value: true
+        link2:
+          Value: true
+        link3:
+          Value: true
+        link4:
+          Value: true
+        link5:
+          Value: true
+      Marker Scale: 1
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: false
+      Tree:
+        base_link:
+          link1:
+            link2:
+              link3:
+                link4:
+                  link5:
+                    end_link1:
+                      {}
+                    end_link2:
+                      {}
+      Update Interval: 0
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -230,15 +272,15 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.3400001525878906
+      Pitch: 0.3050001859664917
       Target Frame: base_link
       Value: Orbit (rviz_default_plugins)
-      Yaw: 5.250182628631592
+      Yaw: 3.2601735591888428
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 1036
+  Height: 1035
   Help:
     collapsed: false
   Hide Left Dock: false
@@ -247,9 +289,9 @@ Window Geometry:
     collapsed: false
   MotionPlanning - Trajectory Slider:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000100000000000002b4000003a0fc0200000005fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000005200fffffffb000000100044006900730070006c0061007900730100000046000000da000000da00fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e00670100000126000001fc000001f100fffffffb0000000800480065006c0070000000029a0000006e0000007600fffffffb0000000a005600690065007700730100000328000000be000000be00ffffff000001f6000003a000000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000100000000000002b40000039ffc0200000005fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000005200fffffffb000000100044006900730070006c0061007900730100000046000000e4000000da00fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e00670100000130000001f1000001f100fffffffb0000000800480065006c0070000000029a0000006e0000007600fffffffb0000000a005600690065007700730100000327000000be000000be00ffffff000003ee0000039f00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Views:
     collapsed: false
-  Width: 1200
-  X: 50
-  Y: 88
+  Width: 1704
+  X: 2560
+  Y: 182
