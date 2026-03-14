@@ -7,7 +7,7 @@ import socket
 from typing import Any, Dict, List, Optional, Tuple
 
 from maix import app, camera, time
-from maix.err import Err
+from maix.err import Err # type: ignore
 
 
 CMD_SET_REPORT = 0xF8
@@ -371,7 +371,7 @@ class MaixCam2ProtocolServer:
         try:
             if len(app_func) > 0:
                 try:
-                    app.switch_app(app_id, app_func)
+                    app.switch_app(app_id, app_func) # type: ignore
                 except TypeError:
                     app.switch_app(app_id)
             else:

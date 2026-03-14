@@ -2,5 +2,7 @@
     "cmake.sourceDirectory": "/home/harekasa/mygo_ws/src/joystick_parser",
     "cmake.configureEnvironment": {
         "CMAKE_PREFIX_PATH": "/home/harekasa/mygo_ws/install/custom_interfaces:/opt/ros/jazzy"
-    }
+    },
+    "python-envs.defaultEnvManager": "ms-python.python:conda",
+    "python-envs.defaultPackageManager": "ms-python.python:conda"
 }
