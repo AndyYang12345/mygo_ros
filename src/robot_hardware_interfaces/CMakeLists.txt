@@ -67,6 +67,18 @@ install(TARGETS arm_serial_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
+add_executable(camera_serial_node
+  src/camera_serial_node.cpp
+)
+target_include_directories(camera_serial_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
+target_compile_features(camera_serial_node PUBLIC c_std_99 cxx_std_17)
+
+install(TARGETS camera_serial_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 add_executable(commander
     src/commander.cpp
 )
@@ -106,6 +118,11 @@ ament_target_dependencies(pole_serial_node
   rclcpp
   std_msgs
   custom_interfaces
+)
+
+ament_target_dependencies(camera_serial_node
+  rclcpp
+  std_msgs
 )
 
 ament_target_dependencies(commander
