@@ -6,6 +6,12 @@
 #include "custom_interfaces/msg/gripper_command.hpp"
 #include "state_machine/robot_state_machine_node.hpp"
 
+namespace
+{
+constexpr const char *kVisionCameraAppId = "mygo_pipeline_uart";
+constexpr const char *kExitConfirmWord = "EXIT_NOW";
+}
+
 std::string VisionTaskState::getName() const
 {
     return "VISION_TASK";
@@ -24,9 +30,15 @@ uint8_t VisionTaskState::getSubState() const
 void VisionTaskState::onEnter(RobotStateMachineNode *context)
 {
     task_active_ = false;
-    context->setMenuItems({"A开始视觉任务", "B取消并返回菜单"});
+    context->setMenuItems({"A开始视觉任务", "B结束视觉程序并返回菜单"});
     context->setMenuSelection(0);
+
+    auto camera_start = std_msgs::msg::String();
+    camera_start.data = std::string("id:") + kVisionCameraAppId;
+    context->getCameraStartAppPub()->publish(camera_start);
+
     RCLCPP_INFO(context->get_logger(), "Entered VISION_TASK state");
+    RCLCPP_INFO(context->get_logger(), "Requested camera app start: %s", kVisionCameraAppId);
 }
 
 void VisionTaskState::onExit(RobotStateMachineNode *context)
@@ -54,6 +66,12 @@ void VisionTaskState::handleButton(
     else if (msg->button_id == 1)
     {
         task_active_ = false;
+
+        auto camera_exit = std_msgs::msg::String();
+        camera_exit.data = std::string("confirm:") + kExitConfirmWord + ",id:" + kVisionCameraAppId;
+        context->getCameraExitAppPub()->publish(camera_exit);
+        RCLCPP_INFO(context->get_logger(), "Requested camera app exit: %s", kVisionCameraAppId);
+
         context->changeState(4);
     }
 }

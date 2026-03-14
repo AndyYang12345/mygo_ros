@@ -46,6 +46,8 @@ public:
     rclcpp::Publisher<custom_interfaces::msg::GripperCommand>::SharedPtr getArmGripperCmdPub();
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr getPresetPub();
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr getJointTrajectoryPub();
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr getCameraStartAppPub();
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr getCameraExitAppPub();
 
     double getChassisMaxLinearSpeed() const;
     double getChassisMaxAngularSpeed() const;
@@ -120,6 +122,8 @@ private:
     rclcpp::Publisher<custom_interfaces::msg::GripperCommand>::SharedPtr arm_gripper_cmd_pub_;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr preset_pub_;
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr joint_trajectory_pub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr camera_start_app_pub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr camera_exit_app_pub_;
 
     rclcpp::Subscription<custom_interfaces::msg::ButtonIntent>::SharedPtr button_sub_;
     rclcpp::Subscription<custom_interfaces::msg::JoystickIntent>::SharedPtr joystick_sub_;

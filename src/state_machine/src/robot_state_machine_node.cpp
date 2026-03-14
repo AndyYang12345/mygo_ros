@@ -166,6 +166,16 @@ RobotStateMachineNode::getJointTrajectoryPub()
     return joint_trajectory_pub_;
 }
 
+rclcpp::Publisher<std_msgs::msg::String>::SharedPtr RobotStateMachineNode::getCameraStartAppPub()
+{
+    return camera_start_app_pub_;
+}
+
+rclcpp::Publisher<std_msgs::msg::String>::SharedPtr RobotStateMachineNode::getCameraExitAppPub()
+{
+    return camera_exit_app_pub_;
+}
+
 double RobotStateMachineNode::getChassisMaxLinearSpeed() const
 {
     return params_.chassis_max_linear_speed;
@@ -269,6 +279,8 @@ void RobotStateMachineNode::setupPublishers()
     preset_pub_ = this->create_publisher<std_msgs::msg::Int32>("/cmd/preset/trigger", 10);
     joint_trajectory_pub_ =
         this->create_publisher<trajectory_msgs::msg::JointTrajectory>("/cmd/arm/joint_trajectory", 10);
+    camera_start_app_pub_ = this->create_publisher<std_msgs::msg::String>("/cmd/camera/start_app", 10);
+    camera_exit_app_pub_ = this->create_publisher<std_msgs::msg::String>("/cmd/camera/exit_app", 10);
 }
 
 void RobotStateMachineNode::setupSubscribers()
