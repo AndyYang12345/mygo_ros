@@ -102,6 +102,7 @@ private:
         double arm_speed_scale = 0.05;
         double joystick_deadzone = 0.1;
         int control_frequency = 50;
+        int menu_exit_joystick_delay_ms = 350;
     } params_;
 
     std::vector<std::string> menu_items_;
@@ -109,6 +110,7 @@ private:
 
     JoystickData left_joystick_;
     JoystickData right_joystick_;
+    rclcpp::Time joystick_block_until_{0, 0, RCL_ROS_TIME};
     bool vision_task_done_ = false;
 
     rclcpp::Publisher<custom_interfaces::msg::RobotState>::SharedPtr state_pub_;

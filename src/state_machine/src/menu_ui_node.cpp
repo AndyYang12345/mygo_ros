@@ -58,37 +58,49 @@ int menuIndexToOctant(int menu_index)
   return kMenuIndexToOctant[static_cast<size_t>(menu_index)];
 }
 
+struct ModeMenuConfig
+{
+  const char * mode;
+  std::array<const char *, kOctantCount> labels;
+  bool enable_lb_submenu;
+};
+
+const std::array<ModeMenuConfig, 6> kModeMenuConfigs = {{
+  {"ARM", {"pickup_right", "pose_1", "home", "pose_2", "pickup_left", "box_left", "normal_detection", "box_right"}, true},
+  {"CHASSIS", {"Home", "NormalDetection", "CylinderSubmission", "CubeSubmission", "CylinderCollection", "CubeCollection", "UnderBridge", "BallSubmission"}, true},
+  {"VISION_TASK", {"A_START", "B_CANCEL", "-", "-", "-", "-", "-", "-"}, false},
+  {"POLE", {"EXIT_POLE_MODE", "-", "-", "-", "-", "-", "-", "-"}, false},
+  {"EMERGENCY", {"E_STOP", "-", "-", "-", "-", "-", "-", "-"}, false},
+  {"IDLE", {"WAIT", "-", "-", "-", "-", "-", "-", "-"}, false}
+}};
+
+const ModeMenuConfig * findModeMenuConfig(const std::string & mode)
+{
+  for (const auto & cfg : kModeMenuConfigs) {
+    if (mode == cfg.mode) {
+      return &cfg;
+    }
+  }
+  return nullptr;
+}
+
 std::vector<std::string> subModesForMainMode(const std::string & main_mode)
 {
-  if (main_mode == "ARM") {
-    return {
-      "pickup_right", "cylinder_right", "home", "cylinder_left",
-      "pickup_left", "box_left", "normal_detection", "box_right"};
+  std::vector<std::string> out(kOctantCount, "-");
+  const auto * cfg = findModeMenuConfig(main_mode);
+  if (!cfg) {
+    return out;
   }
-
-  if (main_mode == "CHASSIS") {
-    return {
-      "Home", "NormalDetection", "CylinderSubmission", "CubeSubmission",
-      "CylinderCollection", "CubeCollection", "UnderBridge", "BallSubmission"};
+  for (size_t i = 0; i < cfg->labels.size(); ++i) {
+    out[i] = cfg->labels[i];
   }
+  return out;
+}
 
-  if (main_mode == "VISION_TASK") {
-    return {"A_START", "B_CANCEL", "-", "-", "-", "-", "-", "-"};
-  }
-
-  if (main_mode == "POLE") {
-    return {"EXIT_POLE_MODE", "-", "-", "-", "-", "-", "-", "-"};
-  }
-
-  if (main_mode == "EMERGENCY") {
-    return {"E_STOP", "-", "-", "-", "-", "-", "-", "-"};
-  }
-
-  if (main_mode == "IDLE") {
-    return {"WAIT", "-", "-", "-", "-", "-", "-", "-"};
-  }
-
-  return {"-", "-", "-", "-", "-", "-", "-", "-"};
+bool isLbSubmenuEnabledForMode(const std::string & mode)
+{
+  const auto * cfg = findModeMenuConfig(mode);
+  return cfg != nullptr && cfg->enable_lb_submenu;
 }
 
 int angleToOctant(float x, float y)
@@ -192,6 +204,10 @@ public:
       sub_labels_ = expandToEightSub(msg.available_modes);
     }
 
+    if (!isLbSubmenuEnabledForMode(state_name_)) {
+      submenu_active_ = false;
+    }
+
     if (sub_state_ >= 0 && sub_state_ < static_cast<int>(msg.available_modes.size())) {
       submode_name_ = msg.available_modes[static_cast<size_t>(sub_state_)];
     } else {
@@ -226,6 +242,10 @@ public:
   void updateSubmenuState(bool active)
   {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (!isLbSubmenuEnabledForMode(state_name_)) {
+      submenu_active_ = false;
+      return;
+    }
     submenu_active_ = active;
     if (submenu_active_) {
       sub_octant_ = angleToOctant(joy_x_, joy_y_);
@@ -244,7 +264,7 @@ public:
     }
 
     const int octant = angleToOctant(x, y);
-    if (lt_held_ && !submenu_active_) {
+    if (state_name_ == "MENU") {
       main_octant_ = octant;
     }
     if (submenu_active_) {
@@ -265,6 +285,12 @@ public:
     pole_locked_state_[1] = (lock_mask & 0x02U) != 0U;
   }
 
+  bool isLbSubmenuAllowed()
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return isLbSubmenuEnabledForMode(state_name_);
+  }
+
 protected:
   void paintEvent(QPaintEvent * event) override
   {
@@ -274,14 +300,15 @@ protected:
     std::string submode_name;
     std::vector<std::string> left_labels;
     std::vector<std::string> right_labels;
-    bool lt_held = false;
     bool submenu_active = false;
     int main_octant = 0;
     int sub_octant = 0;
     int selected_pole_id = 0;
     std::array<bool, 2> pole_locked_state = {false, false};
-    double left_radius = 150.0;
-    double right_radius = 128.0;
+    double main_menu_radius = 220.0;
+    double sub_menu_radius = 158.0;
+    double main_menu_visibility = 0.0;
+    double sub_menu_visibility = 0.0;
 
     {
       std::lock_guard<std::mutex> lock(mutex_);
@@ -289,14 +316,15 @@ protected:
       submode_name = submode_name_;
       left_labels = main_labels_;
       right_labels = sub_labels_;
-      lt_held = lt_held_;
       submenu_active = submenu_active_;
       main_octant = main_octant_;
       sub_octant = sub_octant_;
       selected_pole_id = selected_pole_id_;
       pole_locked_state = pole_locked_state_;
-      left_radius = left_radius_;
-      right_radius = right_radius_;
+      main_menu_radius = main_menu_radius_;
+      sub_menu_radius = sub_menu_radius_;
+      main_menu_visibility = main_menu_visibility_;
+      sub_menu_visibility = sub_menu_visibility_;
     }
 
     QPainter painter(this);
@@ -325,31 +353,42 @@ protected:
     painter.drawText(QRect(28, 64, width() - 56, 42), Qt::AlignLeft | Qt::AlignVCenter, mode_text);
 
     const bool show_pole_cards = (state_name == "POLE");
+    const bool show_main_menu = (state_name == "MENU");
+    const bool show_sub_menu = (!show_main_menu && submenu_active);
 
-    const double target_left_radius =
-      (lt_held && !submenu_active) ? 208.0 : (submenu_active ? 150.0 : 168.0);
-    const double target_right_radius =
-      submenu_active ? 188.0 : (lt_held ? 112.0 : 145.0);
+    const double target_main_visibility = show_main_menu ? 1.0 : 0.0;
+    const double target_sub_visibility = show_sub_menu ? 1.0 : 0.0;
+    const double target_main_radius = show_main_menu ? 228.0 : 205.0;
+    const double target_sub_radius = show_sub_menu ? 162.0 : 142.0;
 
-    left_radius = smoothApproach(left_radius, target_left_radius, 0.22);
-    right_radius = smoothApproach(right_radius, target_right_radius, 0.22);
+    main_menu_visibility = smoothApproach(main_menu_visibility, target_main_visibility, 0.18);
+    sub_menu_visibility = smoothApproach(sub_menu_visibility, target_sub_visibility, 0.18);
+    main_menu_radius = smoothApproach(main_menu_radius, target_main_radius, 0.20);
+    sub_menu_radius = smoothApproach(sub_menu_radius, target_sub_radius, 0.20);
 
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      left_radius_ = left_radius;
-      right_radius_ = right_radius;
+      main_menu_radius_ = main_menu_radius;
+      sub_menu_radius_ = sub_menu_radius;
+      main_menu_visibility_ = main_menu_visibility;
+      sub_menu_visibility_ = sub_menu_visibility;
     }
 
-    const QPointF left_center(width() * 0.30, show_pole_cards ? height() * 0.52 : height() * 0.56);
-    const QPointF right_center(width() * 0.74, show_pole_cards ? height() * 0.52 : height() * 0.56);
+    const QPointF center(width() * 0.50, show_pole_cards ? height() * 0.49 : height() * 0.54);
 
-    drawWheel(
-      painter, left_center, left_radius, left_labels, main_octant,
-      lt_held && !submenu_active, QColor(31, 74, 112), QColor(17, 41, 65), QColor(245, 250, 255));
+    if (main_menu_visibility > 0.04) {
+      drawWheel(
+        painter, center, main_menu_radius, left_labels, main_octant,
+        show_main_menu, QColor(32, 90, 154), QColor(11, 46, 86), QColor(239, 247, 255), main_menu_visibility,
+        "主菜单");
+    }
 
-    drawWheel(
-      painter, right_center, right_radius, right_labels, sub_octant,
-      submenu_active, QColor(90, 122, 53), QColor(46, 79, 26), QColor(248, 252, 242));
+    if (sub_menu_visibility > 0.04) {
+      drawWheel(
+        painter, center, sub_menu_radius, right_labels, sub_octant,
+        show_sub_menu, QColor(103, 130, 60), QColor(52, 85, 30), QColor(246, 252, 238), sub_menu_visibility,
+        "子菜单");
+    }
 
     if (show_pole_cards) {
       drawPoleStatusCards(painter, selected_pole_id, pole_locked_state);
@@ -421,15 +460,30 @@ private:
     bool active,
     const QColor & base_color,
     const QColor & active_color,
-    const QColor & fill_color)
+    const QColor & fill_color,
+    double visibility,
+    const QString & title)
   {
     painter.save();
+    painter.setOpacity(std::clamp(visibility, 0.0, 1.0));
 
     QColor ring = base_color;
     ring.setAlpha(190);
     painter.setPen(QPen(ring, active ? 4.0 : 2.5));
     painter.setBrush(fill_color);
     painter.drawEllipse(center, radius, radius);
+
+    QFont title_font("Noto Sans CJK SC", active ? 15 : 13, QFont::DemiBold);
+    painter.setFont(title_font);
+    painter.setPen(active ? QColor(12, 37, 56) : QColor(52, 75, 96));
+    painter.drawText(
+      QRect(
+        static_cast<int>(center.x() - radius),
+        static_cast<int>(center.y() - radius - 34),
+        static_cast<int>(radius * 2.0),
+        28),
+      Qt::AlignCenter,
+      title);
 
     QFont label_font("Noto Sans CJK SC", active ? 13 : 11, active ? QFont::Bold : QFont::DemiBold);
     painter.setFont(label_font);
@@ -496,8 +550,10 @@ private:
   int sub_octant_ = 0;
   int selected_pole_id_ = 0;
   std::array<bool, 2> pole_locked_state_ = {false, false};
-  double left_radius_ = 168.0;
-  double right_radius_ = 145.0;
+  double main_menu_radius_ = 220.0;
+  double sub_menu_radius_ = 158.0;
+  double main_menu_visibility_ = 0.0;
+  double sub_menu_visibility_ = 0.0;
 
   std::vector<std::string> main_labels_ = {
     "ARM", "VISION_TASK", "CHASSIS", "POLE", "IDLE", "EMERGENCY", "CHASSIS", "ARM"};
@@ -546,6 +602,10 @@ public:
         }
 
         if (msg->button_id != 4) {
+          return;
+        }
+
+        if (!widget_->isLbSubmenuAllowed()) {
           return;
         }
 

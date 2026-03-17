@@ -79,9 +79,20 @@ void RobotStateMachineNode::changeState(uint8_t state_enum)
         current_state_->onExit(this);
     }
 
+    const uint8_t old_state_enum = current_state_->getStateEnum();
     auto old_state_name = current_state_->getName();
     current_state_ = new_state;
     current_state_->onEnter(this);
+
+    if (old_state_enum == 4 && state_enum != 4)
+    {
+        joystick_block_until_ = this->now() + rclcpp::Duration::from_seconds(
+            static_cast<double>(params_.menu_exit_joystick_delay_ms) / 1000.0);
+        RCLCPP_INFO(
+            this->get_logger(),
+            "Joystick input blocked for %d ms after MENU selection",
+            params_.menu_exit_joystick_delay_ms);
+    }
 
     RCLCPP_INFO(
         this->get_logger(), "State changed: %s -> %s",
@@ -254,12 +265,14 @@ void RobotStateMachineNode::declareParameters()
     this->declare_parameter<double>("arm.speed_scale", 0.05);
     this->declare_parameter<double>("joystick.deadzone", 0.1);
     this->declare_parameter<int>("control.frequency", 50);
+    this->declare_parameter<int>("menu.exit_joystick_delay_ms", 350);
 
     params_.chassis_max_linear_speed = this->get_parameter("chassis.max_linear_speed").as_double();
     params_.chassis_max_angular_speed = this->get_parameter("chassis.max_angular_speed").as_double();
     params_.arm_speed_scale = this->get_parameter("arm.speed_scale").as_double();
     params_.joystick_deadzone = this->get_parameter("joystick.deadzone").as_double();
     params_.control_frequency = this->get_parameter("control.frequency").as_int();
+    params_.menu_exit_joystick_delay_ms = this->get_parameter("menu.exit_joystick_delay_ms").as_int();
 }
 
 void RobotStateMachineNode::setupPublishers()
@@ -329,6 +342,10 @@ void RobotStateMachineNode::setupSubscribers()
 
             if (current_state_)
             {
+                if (this->now() < joystick_block_until_)
+                {
+                    return;
+                }
                 current_state_->handleJoystick(this, msg);
             }
         });
