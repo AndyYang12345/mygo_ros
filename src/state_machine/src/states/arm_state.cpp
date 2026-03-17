@@ -17,6 +17,12 @@ constexpr uint8_t kPressEvent = 0;
 constexpr uint8_t kReleaseEvent = 1;
 const char *kOctantNames[8] = {
     "RIGHT", "UP_RIGHT", "UP", "UP_LEFT", "LEFT", "DOWN_LEFT", "DOWN", "DOWN_RIGHT"};
+
+double pwmToRad(double pwm)
+{
+    const double degree = (pwm - 1500.0) / 1000.0 * 135.0;
+    return degree * static_cast<double>(kPi) / 180.0;
+}
 }
 
 std::string ArmState::getName() const
@@ -39,24 +45,47 @@ void ArmState::onEnter(RobotStateMachineNode *context)
     rt_press_latched_ = false;
     target_joints_initialized_ = false;
     waiting_initial_state_ = true;
+    preset_sync_pending_ = false;
+    preset_motion_in_progress_ = false;
+    kg_sync_requested_ = false;
+    latest_feedback_valid_ = false;
     updateSubmenuUi(context);
 
     if (!current_joint_sub_)
     {
         current_joint_sub_ = context->create_subscription<example_interfaces::msg::Float64MultiArray>(
-            "/arm/current_joint_radians", 10,
-            [this](const example_interfaces::msg::Float64MultiArray::SharedPtr msg)
+            "/arm/current_pwm", 10,
+            [this, context](const example_interfaces::msg::Float64MultiArray::SharedPtr msg)
             {
-                if (!msg || msg->data.size() < target_joints_rad_.size())
+                if (!msg || msg->data.size() < 5)
                 {
                     return;
                 }
-                for (size_t i = 0; i < target_joints_rad_.size(); ++i)
+
+                for (size_t i = 0; i < target_pwms_.size(); ++i)
                 {
-                    target_joints_rad_[i] = msg->data[i];
+                    latest_feedback_joints_rad_[i] = pwmToRad(msg->data[i]);
                 }
-                target_joints_initialized_ = true;
-                waiting_initial_state_ = false;
+                latest_feedback_valid_ = true;
+
+                const bool should_update_direct_target =
+                    (!target_joints_initialized_) || waiting_initial_state_ || preset_sync_pending_;
+
+                if (should_update_direct_target)
+                {
+                    for (size_t i = 0; i < target_pwms_.size(); ++i)
+                    {
+                        target_pwms_[i] = msg->data[i];
+                        target_joints_rad_[i] = latest_feedback_joints_rad_[i];
+                    }
+                    target_joints_initialized_ = true;
+                    waiting_initial_state_ = false;
+                }
+
+                if (kg_sync_requested_)
+                {
+                    kg_sync_requested_ = false;
+                }
             });
     }
 
@@ -64,6 +93,7 @@ void ArmState::onEnter(RobotStateMachineNode *context)
     query_msg.data = "kg";
     context->getArmQueryCurrentPub()->publish(query_msg);
     last_query_time_ = context->now();
+    next_sync_query_time_ = context->now() + rclcpp::Duration::from_seconds(kg_sync_interval_s_);
 
     last_update_time_ = context->now();
 
@@ -97,6 +127,11 @@ void ArmState::handleButton(
                 target.target_name = "home";
             }
             context->getArmNamedTargetPub()->publish(target);
+            target_joints_initialized_ = false;
+            waiting_initial_state_ = true;
+            preset_sync_pending_ = true;
+            preset_motion_in_progress_ = true;
+            preset_sync_due_time_ = context->now() + rclcpp::Duration::from_seconds(preset_sync_delay_s_);
             updateSubmenuUi(context);
             RCLCPP_INFO(
                 context->get_logger(),
@@ -146,6 +181,11 @@ void ArmState::handleJoystick(
     RobotStateMachineNode *context,
     const custom_interfaces::msg::JoystickIntent::SharedPtr msg)
 {
+    if (preset_motion_in_progress_)
+    {
+        return;
+    }
+
     if (msg->joystick_id == 1 && submenu_active_)
     {
         const float x = msg->x;
@@ -264,10 +304,30 @@ void ArmState::update(RobotStateMachineNode *context)
         return;
     }
 
+    if (preset_motion_in_progress_)
+    {
+        if (context->now() < preset_sync_due_time_)
+        {
+            return;
+        }
+        preset_motion_in_progress_ = false;
+    }
+
     if (!target_joints_initialized_)
     {
         const auto now = context->now();
-        if ((now - last_query_time_).seconds() > 0.35)
+
+        if (preset_sync_pending_ && now >= preset_sync_due_time_)
+        {
+            auto query_msg = std_msgs::msg::String();
+            query_msg.data = "kg";
+            context->getArmQueryCurrentPub()->publish(query_msg);
+            last_query_time_ = now;
+            preset_sync_pending_ = false;
+            return;
+        }
+
+        if (!preset_sync_pending_ && (now - last_query_time_).seconds() > 0.35)
         {
             auto query_msg = std_msgs::msg::String();
             query_msg.data = "kg";
@@ -283,7 +343,21 @@ void ArmState::update(RobotStateMachineNode *context)
         return;
     }
 
-    auto now = context->now();
+    const auto now = context->now();
+    if (kg_sync_requested_ && (now - last_query_time_).seconds() > kg_query_timeout_s_)
+    {
+        kg_sync_requested_ = false;
+    }
+    if (!kg_sync_requested_ && now >= next_sync_query_time_)
+    {
+        auto query_msg = std_msgs::msg::String();
+        query_msg.data = "kg";
+        context->getArmQueryCurrentPub()->publish(query_msg);
+        last_query_time_ = now;
+        kg_sync_requested_ = true;
+        next_sync_query_time_ = now + rclcpp::Duration::from_seconds(kg_sync_interval_s_);
+    }
+
     double dt = (now - last_update_time_).seconds();
     last_update_time_ = now;
     if (dt <= 0.0 || dt > 0.2)
@@ -292,8 +366,13 @@ void ArmState::update(RobotStateMachineNode *context)
         dt = 1.0 / static_cast<double>(hz);
     }
 
-    applyAxisControl(context, dt);
-    publishJointCommand(context);
+    const bool changed = applyAxisControl(context, dt);
+    if (!changed)
+    {
+        return;
+    }
+
+    publishDirectPwmCommand(context);
 }
 
 uint8_t ArmState::getSubState() const
@@ -335,7 +414,14 @@ void ArmState::publishJointCommand(RobotStateMachineNode *context)
     context->getArmJointCommandPub()->publish(msg);
 }
 
-void ArmState::applyAxisControl(RobotStateMachineNode *context, double dt)
+void ArmState::publishDirectPwmCommand(RobotStateMachineNode *context)
+{
+    auto msg = example_interfaces::msg::Float64MultiArray();
+    msg.data.assign(target_pwms_.begin(), target_pwms_.end());
+    context->getArmDirectPwmPub()->publish(msg);
+}
+
+bool ArmState::applyAxisControl(RobotStateMachineNode *context, double dt)
 {
     const auto &left = context->getLeftJoystick();
     const auto &right = context->getRightJoystick();
@@ -346,16 +432,47 @@ void ArmState::applyAxisControl(RobotStateMachineNode *context, double dt)
     const double rx = (std::abs(right.x) < deadzone) ? 0.0 : static_cast<double>(right.x);
     const double ry = (std::abs(right.y) < deadzone) ? 0.0 : static_cast<double>(right.y);
 
-    const auto &speed = precision_mode_ ? max_speed_precision_rad_s_ : max_speed_high_rad_s_;
+    const auto &speed = precision_mode_ ? max_speed_precision_pwm_s_ : max_speed_high_pwm_s_;
 
-    target_joints_rad_[0] += speed[0] * lx * dt;
-    target_joints_rad_[1] += speed[1] * ly * dt;
-    target_joints_rad_[4] += speed[4] * rx * dt;
-    target_joints_rad_[right_y_selected_servo_] += speed[right_y_selected_servo_] * ry * dt;
+    std::array<double, 5> old_pwms = target_pwms_;
+    const std::array<double, 5> delta = {
+        speed[0] * lx * dt,
+        speed[1] * ly * dt,
+        speed[2] * 0.0 * dt,
+        speed[3] * 0.0 * dt,
+        speed[4] * rx * dt};
 
-    for (size_t i = 0; i < target_joints_rad_.size(); ++i)
+    if (std::abs(delta[0]) >= min_step_pwm_)
     {
-        target_joints_rad_[i] = std::clamp(target_joints_rad_[i], min_joint_rad_[i], max_joint_rad_[i]);
+        target_pwms_[0] += delta[0];
     }
+    if (std::abs(delta[1]) >= min_step_pwm_)
+    {
+        target_pwms_[1] += delta[1];
+    }
+    if (std::abs(delta[4]) >= min_step_pwm_)
+    {
+        target_pwms_[4] += delta[4];
+    }
+
+    const double ry_delta = speed[right_y_selected_servo_] * ry * dt;
+    if (std::abs(ry_delta) >= min_step_pwm_)
+    {
+        target_pwms_[right_y_selected_servo_] += ry_delta;
+    }
+
+    bool changed = false;
+
+    for (size_t i = 0; i < target_pwms_.size(); ++i)
+    {
+        target_pwms_[i] = std::clamp(target_pwms_[i], min_pwm_[i], max_pwm_[i]);
+        target_joints_rad_[i] = pwmToRad(target_pwms_[i]);
+        if (std::abs(target_pwms_[i] - old_pwms[i]) >= min_step_pwm_)
+        {
+            changed = true;
+        }
+    }
+
+    return changed;
 }
 

@@ -166,6 +166,12 @@ RobotStateMachineNode::getArmJointCommandPub()
     return arm_joint_command_pub_;
 }
 
+rclcpp::Publisher<example_interfaces::msg::Float64MultiArray>::SharedPtr
+RobotStateMachineNode::getArmDirectPwmPub()
+{
+    return arm_direct_pwm_pub_;
+}
+
 rclcpp::Publisher<std_msgs::msg::String>::SharedPtr
 RobotStateMachineNode::getArmQueryCurrentPub()
 {
@@ -301,6 +307,8 @@ void RobotStateMachineNode::setupPublishers()
         this->create_publisher<custom_interfaces::msg::ArmJointTarget>("/cmd/arm/joint_target", 10);
     arm_joint_command_pub_ =
         this->create_publisher<example_interfaces::msg::Float64MultiArray>("/cmd/arm/joint_command", 10);
+    arm_direct_pwm_pub_ =
+        this->create_publisher<example_interfaces::msg::Float64MultiArray>("/cmd/arm/direct_pwm_command", 10);
     arm_query_current_pub_ =
         this->create_publisher<std_msgs::msg::String>("/cmd/arm/query_current", 10);
     arm_gripper_cmd_pub_ =

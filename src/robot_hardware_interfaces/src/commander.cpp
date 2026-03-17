@@ -23,6 +23,7 @@ class Commander {
 public:
     explicit Commander(std::shared_ptr<rclcpp::Node> node) : node_(std::move(node)) {
         RCLCPP_INFO(node_->get_logger(), "Commander node has been started.");
+        joint_command_visual_only_ = node_->declare_parameter<bool>("joint_command_visual_only", true);
 
         arm_ = std::make_shared<MoveGroupInterface>(node_, "arm");
         arm_->setMaxVelocityScalingFactor(1.0);
@@ -42,6 +43,10 @@ public:
             "/cmd/arm/joint_command",
             10,
             std::bind(&Commander::jointCmdCallback, this, std::placeholders::_1));
+        current_joint_rad_sub_ = node_->create_subscription<Float64MultiArray>(
+            "/arm/current_joint_radians",
+            10,
+            std::bind(&Commander::currentJointRadCallback, this, std::placeholders::_1));
         named_target_sub_ = node_->create_subscription<ArmNamedTarget>(
             "/cmd/arm/named_target",
             10,
@@ -54,6 +59,11 @@ public:
         arm_joint_target_pub_ = node_->create_publisher<ArmJointTarget>(
             "/cmd/arm/joint_target",
             10);
+
+        RCLCPP_INFO(
+            node_->get_logger(),
+            "joint_command mode: %s",
+            joint_command_visual_only_ ? "MoveIt target sync only (no execute)" : "plan+execute");
     }
 
     void goToNamedTarget(const std::string &target_name) {
@@ -67,6 +77,20 @@ public:
         arm_->setStartStateToCurrentState();
         arm_->setJointValueTarget(joints);
         planAndExecute(arm_);
+    }
+
+    void syncJointTargetToMoveIt(const std::vector<double> &joints) {
+        arm_->setStartStateToCurrentState();
+        const bool accepted = arm_->setJointValueTarget(joints);
+        if (!accepted) {
+            RCLCPP_WARN(node_->get_logger(), "MoveIt rejected joint_command target for visualization sync.");
+            return;
+        }
+        RCLCPP_INFO_THROTTLE(
+            node_->get_logger(),
+            *node_->get_clock(),
+            2000,
+            "Updated MoveIt joint target from /cmd/arm/joint_command (no execute, no hardware command).");
     }
 
     void goToPoseTarget(
@@ -216,10 +240,27 @@ private:
         }
         auto joints = msg->data;
         if (joints.size() == 5) {
-            goToJointTarget(joints);
+            if (joint_command_visual_only_) {
+                syncJointTargetToMoveIt(joints);
+            } else {
+                goToJointTarget(joints);
+            }
         } else {
             RCLCPP_ERROR(node_->get_logger(), "Received joint command with incorrect size: %zu (expected 5)", joints.size());
         }
+    }
+
+    void currentJointRadCallback(const Float64MultiArray::SharedPtr msg) {
+        if (!msg || !joint_command_visual_only_) {
+            return;
+        }
+
+        const auto &joints = msg->data;
+        if (joints.size() != 5) {
+            return;
+        }
+
+        syncJointTargetToMoveIt(joints);
     }
 
     void poseCmdCallback(const ArmPoseTarget::SharedPtr msg) {
@@ -247,9 +288,11 @@ private:
 
     rclcpp::Subscription<GripperCommand>::SharedPtr open_gripper_sub_;
     rclcpp::Subscription<Float64MultiArray>::SharedPtr joint_cmd_sub_;
+    rclcpp::Subscription<Float64MultiArray>::SharedPtr current_joint_rad_sub_;
     rclcpp::Subscription<ArmNamedTarget>::SharedPtr named_target_sub_;
     rclcpp::Subscription<ArmPoseTarget>::SharedPtr pose_cmd_sub_;
     rclcpp::Publisher<ArmJointTarget>::SharedPtr arm_joint_target_pub_;
+    bool joint_command_visual_only_ = true;
 
     std::string last_named_target_ = "home";
 };

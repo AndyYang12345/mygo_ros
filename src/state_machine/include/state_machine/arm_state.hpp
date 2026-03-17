@@ -36,7 +36,8 @@ private:
   void updateSubmenuUi(RobotStateMachineNode * context);
   int angleToOctant(float x, float y) const;
   void publishJointCommand(RobotStateMachineNode * context);
-  void applyAxisControl(RobotStateMachineNode * context, double dt);
+  void publishDirectPwmCommand(RobotStateMachineNode * context);
+  bool applyAxisControl(RobotStateMachineNode * context, double dt);
 
   std::vector<std::string> presets_ = {
     "pickup_right",
@@ -59,26 +60,28 @@ private:
   int right_y_selected_servo_ = 2;
 
   std::array<double, 5> target_joints_rad_ = {0.0, 0.0, 0.0, 0.0, 0.0};
+  std::array<double, 5> target_pwms_ = {1500.0, 1500.0, 1500.0, 1500.0, 1500.0};
   bool target_joints_initialized_ = false;
   bool waiting_initial_state_ = true;
+  bool preset_sync_pending_ = false;
+  bool preset_motion_in_progress_ = false;
+  bool kg_sync_requested_ = false;
+  bool latest_feedback_valid_ = false;
 
   rclcpp::Time last_update_time_{0, 0, RCL_ROS_TIME};
   rclcpp::Time last_query_time_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time preset_sync_due_time_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time next_sync_query_time_{0, 0, RCL_ROS_TIME};
   rclcpp::Subscription<example_interfaces::msg::Float64MultiArray>::SharedPtr current_joint_sub_;
+  std::array<double, 5> latest_feedback_joints_rad_ = {0.0, 0.0, 0.0, 0.0, 0.0};
 
-  std::array<double, 5> max_speed_high_rad_s_ = {1.20, 1.00, 0.90, 0.90, 1.20};
-  std::array<double, 5> max_speed_precision_rad_s_ = {0.35, 0.30, 0.25, 0.25, 0.35};
+  std::array<double, 5> max_speed_high_pwm_s_ = {260.0, 220.0, 180.0, 180.0, 220.0};
+  std::array<double, 5> max_speed_precision_pwm_s_ = {85.0, 70.0, 55.0, 55.0, 70.0};
+  double preset_sync_delay_s_ = 1.2;
+  double kg_sync_interval_s_ = 2.0;
+  double kg_query_timeout_s_ = 0.8;
+  double min_step_pwm_ = 0.6;
 
-  const std::array<double, 5> min_joint_rad_ = {
-    -2.35619449019,
-    -2.35619449019,
-    -2.35619449019,
-    -2.35619449019,
-    -2.35619449019};
-  const std::array<double, 5> max_joint_rad_ = {
-    2.35619449019,
-    2.35619449019,
-    2.35619449019,
-    2.35619449019,
-    2.35619449019};
+  const std::array<double, 5> min_pwm_ = {500.0, 500.0, 500.0, 500.0, 500.0};
+  const std::array<double, 5> max_pwm_ = {2500.0, 2500.0, 2500.0, 2500.0, 2500.0};
 };

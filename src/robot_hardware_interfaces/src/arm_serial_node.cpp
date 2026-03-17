@@ -80,6 +80,16 @@ public:
 			10,
 			std::bind(&ArmSerialNode::jointTargetCallback, this, std::placeholders::_1));
 
+		joint_command_sub_ = this->create_subscription<Float64MultiArray>(
+			"/cmd/arm/joint_command",
+			10,
+			std::bind(&ArmSerialNode::directJointCommandCallback, this, std::placeholders::_1));
+
+		direct_pwm_sub_ = this->create_subscription<Float64MultiArray>(
+			"/cmd/arm/direct_pwm_command",
+			10,
+			std::bind(&ArmSerialNode::directPwmCallback, this, std::placeholders::_1));
+
 		gripper_sub_ = this->create_subscription<GripperCommand>(
 			"/cmd/arm/gripper",
 			10,
@@ -539,6 +549,87 @@ private:
 		planAndSendArm();
 	}
 
+	void directJointCommandCallback(const Float64MultiArray::SharedPtr msg)
+	{
+		if (!msg) {
+			return;
+		}
+
+		if (msg->data.size() < kArmServoCount) {
+			RCLCPP_ERROR(
+				this->get_logger(),
+				"Direct joint command requires at least %d joints, got %zu",
+				kArmServoCount,
+				msg->data.size());
+			return;
+		}
+
+		sendDirectJointCommand(msg->data, direct_joint_time_ms_);
+	}
+
+	void directPwmCallback(const Float64MultiArray::SharedPtr msg)
+	{
+		if (!msg) {
+			return;
+		}
+
+		if (!sender_ || !sender_->is_ready()) {
+			RCLCPP_WARN(this->get_logger(), "Serial sender not ready, direct pwm command skipped.");
+			return;
+		}
+
+		if (msg->data.size() < kArmServoCount) {
+			RCLCPP_ERROR(
+				this->get_logger(),
+				"Direct PWM command requires at least %d values, got %zu",
+				kArmServoCount,
+				msg->data.size());
+			return;
+		}
+
+		std::array<int, kTotalServoCount> frame_pwms = {
+			last_arm_pwms_[0],
+			last_arm_pwms_[1],
+			last_arm_pwms_[2],
+			last_arm_pwms_[3],
+			last_arm_pwms_[4],
+			last_gripper_pwm_};
+
+		for (int servo_id = 0; servo_id < kArmServoCount; ++servo_id) {
+			const double value = msg->data[static_cast<size_t>(servo_id)];
+			if (!std::isfinite(value)) {
+				RCLCPP_ERROR(this->get_logger(), "Direct PWM command contains non-finite value at servo_id=%d", servo_id);
+				return;
+			}
+
+			const int pwm = static_cast<int>(std::lround(clamp(value, 500.0, 2500.0)));
+			frame_pwms[static_cast<size_t>(servo_id)] = pwm;
+			last_arm_pwms_[static_cast<size_t>(servo_id)] = pwm;
+
+			const double joint_rad = pwmToAngleDegree(static_cast<double>(pwm)) * M_PI / 180.0;
+			if (servo_id < static_cast<int>(last_reported_joints_.size())) {
+				last_reported_joints_[static_cast<size_t>(servo_id)] = joint_rad;
+			}
+		}
+
+		if (msg->data.size() > static_cast<size_t>(kGripperServoId)) {
+			const double gripper_value = msg->data[static_cast<size_t>(kGripperServoId)];
+			if (!std::isfinite(gripper_value)) {
+				RCLCPP_ERROR(this->get_logger(), "Direct PWM command contains non-finite gripper value");
+				return;
+			}
+
+			last_gripper_pwm_ = static_cast<int>(std::lround(clamp(gripper_value, 500.0, 2500.0)));
+			frame_pwms[static_cast<size_t>(kGripperServoId)] = last_gripper_pwm_;
+		}
+
+		const auto payload = formatArmFrame(frame_pwms, direct_joint_time_ms_);
+		RCLCPP_INFO(this->get_logger(), "Formatted direct pwm frame: %s", payload.c_str());
+		if (!sender_->send(payload)) {
+			RCLCPP_ERROR(this->get_logger(), "Failed to send direct pwm payload: %s", payload.c_str());
+		}
+	}
+
 	void poseTargetCallback(const ArmPoseTarget::SharedPtr msg)
 	{
 		if (!use_moveit_mode_) {
@@ -610,6 +701,8 @@ private:
 	std::shared_ptr<MoveGroupInterface> gripper_;
 
 	rclcpp::Subscription<ArmJointTarget>::SharedPtr joint_target_sub_;
+	rclcpp::Subscription<Float64MultiArray>::SharedPtr joint_command_sub_;
+	rclcpp::Subscription<Float64MultiArray>::SharedPtr direct_pwm_sub_;
 	rclcpp::Subscription<GripperCommand>::SharedPtr gripper_sub_;
 	rclcpp::Subscription<String>::SharedPtr query_current_sub_;
 	rclcpp::Publisher<Float64MultiArray>::SharedPtr current_pwm_pub_;

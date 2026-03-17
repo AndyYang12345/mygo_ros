@@ -45,6 +45,7 @@ public:
     rclcpp::Publisher<custom_interfaces::msg::ArmPoseTarget>::SharedPtr getArmPoseTargetPub();
     rclcpp::Publisher<custom_interfaces::msg::ArmJointTarget>::SharedPtr getArmJointTargetPub();
     rclcpp::Publisher<example_interfaces::msg::Float64MultiArray>::SharedPtr getArmJointCommandPub();
+    rclcpp::Publisher<example_interfaces::msg::Float64MultiArray>::SharedPtr getArmDirectPwmPub();
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr getArmQueryCurrentPub();
     rclcpp::Publisher<custom_interfaces::msg::GripperCommand>::SharedPtr getArmGripperCmdPub();
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr getPresetPub();
@@ -125,6 +126,7 @@ private:
     rclcpp::Publisher<custom_interfaces::msg::ArmPoseTarget>::SharedPtr arm_pose_target_pub_;
     rclcpp::Publisher<custom_interfaces::msg::ArmJointTarget>::SharedPtr arm_joint_target_pub_;
     rclcpp::Publisher<example_interfaces::msg::Float64MultiArray>::SharedPtr arm_joint_command_pub_;
+    rclcpp::Publisher<example_interfaces::msg::Float64MultiArray>::SharedPtr arm_direct_pwm_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr arm_query_current_pub_;
     rclcpp::Publisher<custom_interfaces::msg::GripperCommand>::SharedPtr arm_gripper_cmd_pub_;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr preset_pub_;
