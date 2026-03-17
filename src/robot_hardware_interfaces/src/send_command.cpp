@@ -13,9 +13,9 @@ struct ModeDefault {
 
 constexpr std::array<ModeDefault, 5> kModeDefaults = {{
     {"CHASSIS", "/dev/ttyACM1", 115200},
-    {"ARM", "/dev/ttyACM2", 115200},
+    {"ARM", "/dev/ttyACM3", 115200},
     {"CAMERA", "/dev/ttyACM2", 115200},
-    {"GRIPPER", "/dev/ttyACM2", 115200},
+    {"GRIPPER", "/dev/ttyACM3", 115200},
     {"POLE", "/dev/ttyACM0", 115200},
 }};
 }

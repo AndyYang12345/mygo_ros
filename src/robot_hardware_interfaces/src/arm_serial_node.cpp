@@ -123,11 +123,12 @@ private:
 	{
 		std::array<int, kTotalServoCount> pwm{};
 		size_t count = 0;
-
-		for (size_t i = 0; i < frame.size() && count < pwm.size(); ++i)
+		size_t i = 0;
+		while (i < frame.size() && count < pwm.size())
 		{
 			if (frame[i] != 'P')
 			{
+				++i;
 				continue;
 			}
 
