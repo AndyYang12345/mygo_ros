@@ -49,13 +49,10 @@ private:
 	static std::string formatPayload(bool id, float delta)
 	{
 		const float clamped = std::clamp(delta, -1.0F, 1.0F);
+		const bool is_negative = std::signbit(clamped);
 
 		std::ostringstream ss;
-		ss << "#00" << (id ? '1' : '0') << "P";
-
-		if (std::signbit(clamped)) {
-			ss << "-";
-		}
+		ss << "#00" << (id ? '1' : '0') << (is_negative ? 'N' : 'P');
 		ss << std::fixed << std::setprecision(2) << std::abs(clamped) << "!";
 		return ss.str();
 	}
