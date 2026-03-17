@@ -1,8 +1,11 @@
 #pragma once
 
+#include <array>
 #include <string>
 #include <vector>
 
+#include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/msg/joint_state.hpp"
 #include "state_machine/robot_state.hpp"
 
 class ArmState : public RobotState {
@@ -32,15 +35,14 @@ public:
 private:
   void updateSubmenuUi(RobotStateMachineNode * context);
   int angleToOctant(float x, float y) const;
+  void publishJointCommand(RobotStateMachineNode * context);
+  void syncJointStateOnce(RobotStateMachineNode * context);
+  void applyAxisControl(RobotStateMachineNode * context, double dt);
 
-  // Index order follows octants: RIGHT, UP_RIGHT, UP, UP_LEFT, LEFT, DOWN_LEFT, DOWN, DOWN_RIGHT.
-  // Left/right variants are mirrored around the vertical axis for intuitive selection.
   std::vector<std::string> presets_ = {
     "pickup_right",
-    // "cylinder_right",
     "pose_1",
     "home",
-    // "cylinder_left",
     "pose_2",
     "pickup_left",
     "box_left",
@@ -50,4 +52,33 @@ private:
 
   bool submenu_active_ = false;
   int submenu_selection_ = 0;
+
+  bool precision_mode_ = false;
+  bool gripper_open_ = true;
+  bool rt_press_latched_ = false;
+  bool dpad_switch_latched_ = false;
+  int right_y_selected_servo_ = 2;
+
+  std::array<double, 5> target_joints_rad_ = {0.0, 0.0, 0.0, 0.0, 0.0};
+  bool target_joints_initialized_ = false;
+  bool joint_state_received_ = false;
+
+  rclcpp::Time last_update_time_{0, 0, RCL_ROS_TIME};
+  rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub_;
+
+  std::array<double, 5> max_speed_high_rad_s_ = {1.20, 1.00, 0.90, 0.90, 1.20};
+  std::array<double, 5> max_speed_precision_rad_s_ = {0.35, 0.30, 0.25, 0.25, 0.35};
+
+  const std::array<double, 5> min_joint_rad_ = {
+    -2.35619449019,
+    -2.35619449019,
+    -2.35619449019,
+    -2.35619449019,
+    -2.35619449019};
+  const std::array<double, 5> max_joint_rad_ = {
+    2.35619449019,
+    2.35619449019,
+    2.35619449019,
+    2.35619449019,
+    2.35619449019};
 };

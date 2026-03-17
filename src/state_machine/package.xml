@@ -13,6 +13,8 @@
     <depend>std_msgs</depend>
     <depend>geometry_msgs</depend>
     <depend>trajectory_msgs</depend>
+    <depend>sensor_msgs</depend>
+    <depend>example_interfaces</depend>
     <depend>custom_interfaces</depend>
     <depend>qtbase5-dev</depend>
     <exec_depend>joy</exec_depend>

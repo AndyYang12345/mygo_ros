@@ -16,6 +16,7 @@
 #include "custom_interfaces/msg/gripper_command.hpp"
 #include "custom_interfaces/msg/pole_command.hpp"
 #include "custom_interfaces/srv/set_mode.hpp"
+#include "example_interfaces/msg/float64_multi_array.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "state_machine/robot_state.hpp"
@@ -43,6 +44,7 @@ public:
     rclcpp::Publisher<custom_interfaces::msg::ArmNamedTarget>::SharedPtr getArmNamedTargetPub();
     rclcpp::Publisher<custom_interfaces::msg::ArmPoseTarget>::SharedPtr getArmPoseTargetPub();
     rclcpp::Publisher<custom_interfaces::msg::ArmJointTarget>::SharedPtr getArmJointTargetPub();
+    rclcpp::Publisher<example_interfaces::msg::Float64MultiArray>::SharedPtr getArmJointCommandPub();
     rclcpp::Publisher<custom_interfaces::msg::GripperCommand>::SharedPtr getArmGripperCmdPub();
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr getPresetPub();
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr getJointTrajectoryPub();
@@ -119,6 +121,7 @@ private:
     rclcpp::Publisher<custom_interfaces::msg::ArmNamedTarget>::SharedPtr arm_named_target_pub_;
     rclcpp::Publisher<custom_interfaces::msg::ArmPoseTarget>::SharedPtr arm_pose_target_pub_;
     rclcpp::Publisher<custom_interfaces::msg::ArmJointTarget>::SharedPtr arm_joint_target_pub_;
+    rclcpp::Publisher<example_interfaces::msg::Float64MultiArray>::SharedPtr arm_joint_command_pub_;
     rclcpp::Publisher<custom_interfaces::msg::GripperCommand>::SharedPtr arm_gripper_cmd_pub_;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr preset_pub_;
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr joint_trajectory_pub_;

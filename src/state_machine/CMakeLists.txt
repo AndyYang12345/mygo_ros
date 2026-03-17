@@ -11,6 +11,8 @@ find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(example_interfaces REQUIRED)
 find_package(custom_interfaces REQUIRED)
 find_package(Qt5 REQUIRED COMPONENTS Widgets)
 
@@ -43,6 +45,8 @@ ament_target_dependencies(state_machine
   std_msgs
   geometry_msgs
   trajectory_msgs
+  sensor_msgs
+  example_interfaces
   custom_interfaces
 )
 
