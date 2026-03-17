@@ -17,6 +17,7 @@ public:
 
     bool initialize();
     bool send(const std::string &payload);
+    bool request(const std::string &payload, std::string &response, int timeout_ms);
     bool is_ready() const;
 
     const SerialConfig &config() const;

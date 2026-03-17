@@ -106,6 +106,7 @@ ament_target_dependencies(chassis_serial_node
 ament_target_dependencies(arm_serial_node
   rclcpp
   std_msgs
+  example_interfaces
   geometry_msgs
   trajectory_msgs
   moveit_ros_planning_interface

@@ -166,6 +166,12 @@ RobotStateMachineNode::getArmJointCommandPub()
     return arm_joint_command_pub_;
 }
 
+rclcpp::Publisher<std_msgs::msg::String>::SharedPtr
+RobotStateMachineNode::getArmQueryCurrentPub()
+{
+    return arm_query_current_pub_;
+}
+
 rclcpp::Publisher<custom_interfaces::msg::GripperCommand>::SharedPtr
 RobotStateMachineNode::getArmGripperCmdPub()
 {
@@ -295,6 +301,8 @@ void RobotStateMachineNode::setupPublishers()
         this->create_publisher<custom_interfaces::msg::ArmJointTarget>("/cmd/arm/joint_target", 10);
     arm_joint_command_pub_ =
         this->create_publisher<example_interfaces::msg::Float64MultiArray>("/cmd/arm/joint_command", 10);
+    arm_query_current_pub_ =
+        this->create_publisher<std_msgs::msg::String>("/cmd/arm/query_current", 10);
     arm_gripper_cmd_pub_ =
         this->create_publisher<custom_interfaces::msg::GripperCommand>("/cmd/arm/gripper", 10);
     preset_pub_ = this->create_publisher<std_msgs::msg::Int32>("/cmd/preset/trigger", 10);

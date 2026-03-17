@@ -1,8 +1,11 @@
 #include <algorithm>
+#include <array>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <iomanip>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -19,6 +22,8 @@
 #include <custom_interfaces/msg/arm_named_target.hpp>
 #include <custom_interfaces/msg/arm_pose_target.hpp>
 #include <custom_interfaces/msg/gripper_command.hpp>
+#include <example_interfaces/msg/float64_multi_array.hpp>
+#include <std_msgs/msg/string.hpp>
 
 #include "robot_hardware_interfaces/send_command.hpp"
 
@@ -27,6 +32,8 @@ using custom_interfaces::msg::ArmJointTarget;
 using custom_interfaces::msg::ArmNamedTarget;
 using custom_interfaces::msg::ArmPoseTarget;
 using custom_interfaces::msg::GripperCommand;
+using example_interfaces::msg::Float64MultiArray;
+using std_msgs::msg::String;
 
 class ArmSerialNode : public rclcpp::Node
 {
@@ -78,12 +85,21 @@ public:
 			10,
 			std::bind(&ArmSerialNode::gripperCallback, this, std::placeholders::_1));
 
+		query_current_sub_ = this->create_subscription<String>(
+			"/cmd/arm/query_current",
+			10,
+			std::bind(&ArmSerialNode::queryCurrentCallback, this, std::placeholders::_1));
+
+		current_pwm_pub_ = this->create_publisher<Float64MultiArray>("/arm/current_pwm", 10);
+		current_joint_rad_pub_ = this->create_publisher<Float64MultiArray>("/arm/current_joint_radians", 10);
+
 		RCLCPP_INFO(this->get_logger(), "arm_serial_node started.");
 	}
 
 private:
 	static constexpr int kArmServoCount = 5;
 	static constexpr int kGripperServoId = 5;
+    static constexpr int kTotalServoCount = 6;
 
 	static double clamp(double value, double min_value, double max_value)
 	{
@@ -98,28 +114,122 @@ private:
 		return static_cast<int>(std::lround(pwm));
 	}
 
-	std::string formatServoCommand(int servo_id, int pwm, int duration_ms) const
+	static double pwmToAngleDegree(double pwm)
 	{
+		return (pwm - 1500.0) / 1000.0 * 135.0;
+	}
+
+	std::optional<std::array<int, kTotalServoCount>> parsePwmFrame(const std::string &frame) const
+	{
+		std::array<int, kTotalServoCount> pwm{};
+		size_t count = 0;
+
+		for (size_t i = 0; i < frame.size() && count < pwm.size(); ++i)
+		{
+			if (frame[i] != 'P')
+			{
+				continue;
+			}
+
+			++i;
+			std::string digits;
+			while (i < frame.size() && std::isdigit(static_cast<unsigned char>(frame[i])))
+			{
+				digits.push_back(frame[i]);
+				++i;
+			}
+
+			if (!digits.empty())
+			{
+				pwm[count++] = std::stoi(digits);
+			}
+		}
+
+		if (count != pwm.size())
+		{
+			return std::nullopt;
+		}
+
+		return pwm;
+	}
+
+	void queryCurrentCallback(const String::SharedPtr msg)
+	{
+		if (!msg || msg->data != "kg")
+		{
+			return;
+		}
+
+		if (!sender_ || !sender_->is_ready())
+		{
+			RCLCPP_WARN(this->get_logger(), "Serial sender not ready, kg query skipped.");
+			return;
+		}
+
+		std::string response;
+		if (!sender_->request("kg", response, 500))
+		{
+			RCLCPP_WARN(this->get_logger(), "kg query timeout or read failure.");
+			return;
+		}
+
+		auto parsed = parsePwmFrame(response);
+		if (!parsed.has_value())
+		{
+			RCLCPP_WARN(this->get_logger(), "Invalid kg response frame: %s", response.c_str());
+			return;
+		}
+
+		Float64MultiArray pwm_msg;
+		pwm_msg.data.reserve(kTotalServoCount);
+		for (const int value : parsed.value())
+		{
+			pwm_msg.data.push_back(static_cast<double>(value));
+		}
+		current_pwm_pub_->publish(pwm_msg);
+
+		Float64MultiArray joint_msg;
+		joint_msg.data.reserve(kArmServoCount);
+		for (int servo_id = 0; servo_id < kArmServoCount; ++servo_id)
+		{
+			const double degree = pwmToAngleDegree(static_cast<double>(parsed.value()[servo_id]));
+			joint_msg.data.push_back(degree * M_PI / 180.0);
+		}
+		current_joint_rad_pub_->publish(joint_msg);
+
+		RCLCPP_INFO(this->get_logger(), "kg current state updated: frame=%s", response.c_str());
+	}
+
+	std::string formatPwmField(int pwm, int duration_ms) const
+	{
+		const int bounded_pwm = static_cast<int>(clamp(static_cast<double>(pwm), 500.0, 2500.0));
+		const int bounded_duration = std::max(duration_ms, min_segment_time_ms_);
 		std::ostringstream ss;
-		ss << '#'
-			 << std::setw(3) << std::setfill('0') << servo_id
-			 << 'P'
-			 << std::setw(4) << std::setfill('0') << pwm
-			 << 'T'
-			 << std::setw(4) << std::setfill('0') << std::max(duration_ms, min_segment_time_ms_)/5
-			 << '!';
-        RCLCPP_INFO(this->get_logger(), "Formatted servo command: %s", ss.str().c_str());
+		ss << 'P' << std::setw(4) << std::setfill('0') << bounded_pwm
+		   << 'T' << std::setw(4) << std::setfill('0') << bounded_duration;
 		return ss.str();
 	}
 
-	std::string formatArmFrame(const std::vector<std::string> &joint_commands) const
+	std::string formatArmFrame(const std::array<int, kTotalServoCount> &pwms, int duration_ms) const
 	{
 		std::string frame = "{";
-		for (const auto &cmd : joint_commands) {
-			frame += cmd;
+		for (const auto pwm : pwms) {
+			frame += formatPwmField(pwm, duration_ms);
 		}
 		frame += "}";
 		return frame;
+	}
+
+	std::string formatGripperCommand(int pwm, int duration_ms) const
+	{
+		const int bounded_pwm = static_cast<int>(clamp(static_cast<double>(pwm), 500.0, 2500.0));
+		const int bounded_duration = std::max(duration_ms, min_segment_time_ms_);
+		std::ostringstream ss;
+		ss << "#005P"
+		   << std::setw(4) << std::setfill('0') << bounded_pwm
+		   << 'T'
+		   << std::setw(4) << std::setfill('0') << bounded_duration;
+		return ss.str();
 	}
 
 	bool sendDirectJointCommand(const std::vector<double> &joints, int duration_ms)
@@ -138,15 +248,23 @@ private:
 			return false;
 		}
 
-		std::vector<std::string> joint_commands;
-		joint_commands.reserve(kArmServoCount);
+		std::array<int, kTotalServoCount> frame_pwms = {
+			last_arm_pwms_[0],
+			last_arm_pwms_[1],
+			last_arm_pwms_[2],
+			last_arm_pwms_[3],
+			last_arm_pwms_[4],
+			last_gripper_pwm_};
+
 		for (int servo_id = 0; servo_id < kArmServoCount; ++servo_id) {
 			const double degree = joints[servo_id] * 180.0 / M_PI;
 			const int pwm = angleDegreeToPwm(degree);
-			joint_commands.push_back(formatServoCommand(servo_id, pwm, duration_ms));
+			frame_pwms[static_cast<size_t>(servo_id)] = pwm;
+			last_arm_pwms_[static_cast<size_t>(servo_id)] = pwm;
 		}
 
-		const std::string payload = formatArmFrame(joint_commands);
+		const std::string payload = formatArmFrame(frame_pwms, duration_ms);
+        RCLCPP_INFO(this->get_logger(), "Formatted arm frame: %s", payload.c_str());
 
 		if (!sender_->send(payload)) {
 			RCLCPP_ERROR(this->get_logger(), "Failed to send direct joint payload: %s", payload.c_str());
@@ -290,8 +408,13 @@ private:
 
 		for (const auto &point : trajectory.points) {
 			const int duration_ms = durationForPoint(point, previous, min_segment_time_ms_);
-			std::vector<std::string> joint_commands;
-			joint_commands.reserve(kArmServoCount);
+			std::array<int, kTotalServoCount> frame_pwms = {
+				last_arm_pwms_[0],
+				last_arm_pwms_[1],
+				last_arm_pwms_[2],
+				last_arm_pwms_[3],
+				last_arm_pwms_[4],
+				last_gripper_pwm_};
 
 			for (int servo_id = 0; servo_id < kArmServoCount; ++servo_id) {
 				const int joint_index = joint_indices[servo_id];
@@ -302,10 +425,12 @@ private:
 
 				const double degree = point.positions[joint_index] * 180.0 / M_PI;
 				const int pwm = angleDegreeToPwm(degree);
-				joint_commands.push_back(formatServoCommand(servo_id, pwm, duration_ms));
+				frame_pwms[static_cast<size_t>(servo_id)] = pwm;
+				last_arm_pwms_[static_cast<size_t>(servo_id)] = pwm;
 			}
 
-			const std::string payload = formatArmFrame(joint_commands);
+			const std::string payload = formatArmFrame(frame_pwms, duration_ms);
+            RCLCPP_INFO(this->get_logger(), "Formatted arm frame: %s", payload.c_str());
 
 			if (!sender_->send(payload)) {
 				RCLCPP_ERROR(this->get_logger(), "Failed to send arm payload: %s", payload.c_str());
@@ -332,7 +457,9 @@ private:
 		const auto final_position_rad = trajectory.points.back().positions.front();
 		const double degree = final_position_rad * 180.0 / M_PI;
 		const int pwm = angleDegreeToPwm(degree);
-		const auto payload = formatServoCommand(kGripperServoId, pwm, gripper_motion_time_ms_);
+		last_gripper_pwm_ = pwm;
+		const auto payload = formatGripperCommand(last_gripper_pwm_, gripper_motion_time_ms_);
+        RCLCPP_INFO(this->get_logger(), "Formatted gripper frame: %s", payload.c_str());
 
 		if (!sender_->send(payload)) {
 			RCLCPP_ERROR(this->get_logger(), "Failed to send gripper payload: %s", payload.c_str());
@@ -452,7 +579,9 @@ private:
 
 		const double degree = msg->open ? gripper_open_degree_ : gripper_close_degree_;
 		const int pwm = angleDegreeToPwm(degree);
-		const auto payload = formatServoCommand(kGripperServoId, pwm, gripper_motion_time_ms_);
+		last_gripper_pwm_ = pwm;
+		const auto payload = formatGripperCommand(last_gripper_pwm_, gripper_motion_time_ms_);
+        RCLCPP_INFO(this->get_logger(), "Formatted gripper frame: %s", payload.c_str());
 		if (!sender_->send(payload)) {
 			RCLCPP_ERROR(this->get_logger(), "Failed to send direct gripper payload: %s", payload.c_str());
 		}
@@ -471,6 +600,8 @@ private:
 	std::unique_ptr<SendCommand> sender_;
 	std::vector<double> last_direct_joints_;
 	std::vector<double> last_reported_joints_ = std::vector<double>(kArmServoCount, 0.0);
+	std::array<int, kArmServoCount> last_arm_pwms_ = {1500, 1500, 1500, 1500, 1500};
+	int last_gripper_pwm_ = 1500;
 	bool last_direct_joints_valid_ = false;
 	bool moveit_ready_ = false;
 	rclcpp::TimerBase::SharedPtr moveit_init_timer_;
@@ -479,6 +610,9 @@ private:
 
 	rclcpp::Subscription<ArmJointTarget>::SharedPtr joint_target_sub_;
 	rclcpp::Subscription<GripperCommand>::SharedPtr gripper_sub_;
+	rclcpp::Subscription<String>::SharedPtr query_current_sub_;
+	rclcpp::Publisher<Float64MultiArray>::SharedPtr current_pwm_pub_;
+	rclcpp::Publisher<Float64MultiArray>::SharedPtr current_joint_rad_pub_;
 };
 
 int main(int argc, char *argv[])

@@ -2,6 +2,7 @@
 
 #include <cerrno>
 #include <cstring>
+#include <chrono>
 #include <fcntl.h>
 #include <termios.h>
 #include <unistd.h>
@@ -60,6 +61,55 @@ bool SerialPort::write_bytes(const uint8_t* data, size_t size) {
 
 bool SerialPort::write_string(const std::string& data) {
     return write_bytes(reinterpret_cast<const uint8_t*>(data.data()), data.size());
+}
+
+bool SerialPort::read_braced_frame(std::string& frame, int timeout_ms) {
+    frame.clear();
+    if (fd_ < 0 || timeout_ms <= 0) {
+        return false;
+    }
+
+    const auto start = std::chrono::steady_clock::now();
+    bool in_frame = false;
+
+    while (true) {
+        const auto now = std::chrono::steady_clock::now();
+        const auto elapsed_ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
+        if (elapsed_ms >= timeout_ms) {
+            return false;
+        }
+
+        char buffer[128] = {0};
+        const ssize_t count = ::read(fd_, buffer, sizeof(buffer));
+        if (count < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return false;
+        }
+
+        if (count == 0) {
+            continue;
+        }
+
+        for (ssize_t i = 0; i < count; ++i) {
+            const char c = buffer[i];
+            if (!in_frame) {
+                if (c == '{') {
+                    in_frame = true;
+                    frame.clear();
+                    frame.push_back(c);
+                }
+                continue;
+            }
+
+            frame.push_back(c);
+            if (c == '}') {
+                return true;
+            }
+        }
+    }
 }
 
 bool SerialPort::configure_port(int baudrate) {

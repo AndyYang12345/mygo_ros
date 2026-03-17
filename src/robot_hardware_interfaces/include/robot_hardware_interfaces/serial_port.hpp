@@ -17,6 +17,7 @@ public:
 
     bool write_bytes(const uint8_t* data, size_t size);
     bool write_string(const std::string& data);
+    bool read_braced_frame(std::string& frame, int timeout_ms);
 
 private:
     int fd_;

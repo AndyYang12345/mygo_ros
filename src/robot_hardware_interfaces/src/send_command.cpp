@@ -13,9 +13,9 @@ struct ModeDefault {
 
 constexpr std::array<ModeDefault, 5> kModeDefaults = {{
     {"CHASSIS", "/dev/ttyACM1", 115200},
-    {"ARM", "/dev/ttyUSB0", 115200},
+    {"ARM", "/dev/ttyACM2", 115200},
     {"CAMERA", "/dev/ttyACM2", 115200},
-    {"GRIPPER", "/dev/ttyACM1", 115200},
+    {"GRIPPER", "/dev/ttyACM2", 115200},
     {"POLE", "/dev/ttyACM0", 115200},
 }};
 }
@@ -42,6 +42,21 @@ bool SendCommand::send(const std::string &payload)
         return false;
     }
     return serial_port_.write_string(payload);
+}
+
+bool SendCommand::request(const std::string &payload, std::string &response, int timeout_ms)
+{
+    if (!serial_port_.is_open())
+    {
+        return false;
+    }
+
+    if (!serial_port_.write_string(payload))
+    {
+        return false;
+    }
+
+    return serial_port_.read_braced_frame(response, timeout_ms);
 }
 
 bool SendCommand::is_ready() const

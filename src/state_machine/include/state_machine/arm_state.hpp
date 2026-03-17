@@ -4,8 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "example_interfaces/msg/float64_multi_array.hpp"
 #include "rclcpp/rclcpp.hpp"
-#include "sensor_msgs/msg/joint_state.hpp"
 #include "state_machine/robot_state.hpp"
 
 class ArmState : public RobotState {
@@ -36,7 +36,6 @@ private:
   void updateSubmenuUi(RobotStateMachineNode * context);
   int angleToOctant(float x, float y) const;
   void publishJointCommand(RobotStateMachineNode * context);
-  void syncJointStateOnce(RobotStateMachineNode * context);
   void applyAxisControl(RobotStateMachineNode * context, double dt);
 
   std::vector<std::string> presets_ = {
@@ -61,10 +60,11 @@ private:
 
   std::array<double, 5> target_joints_rad_ = {0.0, 0.0, 0.0, 0.0, 0.0};
   bool target_joints_initialized_ = false;
-  bool joint_state_received_ = false;
+  bool waiting_initial_state_ = true;
 
   rclcpp::Time last_update_time_{0, 0, RCL_ROS_TIME};
-  rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub_;
+  rclcpp::Time last_query_time_{0, 0, RCL_ROS_TIME};
+  rclcpp::Subscription<example_interfaces::msg::Float64MultiArray>::SharedPtr current_joint_sub_;
 
   std::array<double, 5> max_speed_high_rad_s_ = {1.20, 1.00, 0.90, 0.90, 1.20};
   std::array<double, 5> max_speed_precision_rad_s_ = {0.35, 0.30, 0.25, 0.25, 0.35};

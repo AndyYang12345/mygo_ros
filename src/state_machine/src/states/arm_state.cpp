@@ -7,6 +7,7 @@
 #include "custom_interfaces/msg/gripper_command.hpp"
 #include "example_interfaces/msg/float64_multi_array.hpp"
 #include "state_machine/robot_state_machine_node.hpp"
+#include "std_msgs/msg/string.hpp"
 
 namespace {
 constexpr float kPi = 3.14159265358979323846F;
@@ -36,33 +37,39 @@ void ArmState::onEnter(RobotStateMachineNode *context)
     right_y_selected_servo_ = 2;
     dpad_switch_latched_ = false;
     rt_press_latched_ = false;
+    target_joints_initialized_ = false;
+    waiting_initial_state_ = true;
     updateSubmenuUi(context);
 
-    if (!joint_state_sub_)
+    if (!current_joint_sub_)
     {
-        joint_state_sub_ = context->create_subscription<sensor_msgs::msg::JointState>(
-            "/joint_states", 20,
-            [this](const sensor_msgs::msg::JointState::SharedPtr msg)
+        current_joint_sub_ = context->create_subscription<example_interfaces::msg::Float64MultiArray>(
+            "/arm/current_joint_radians", 10,
+            [this](const example_interfaces::msg::Float64MultiArray::SharedPtr msg)
             {
-                if (msg->position.size() < target_joints_rad_.size())
+                if (!msg || msg->data.size() < target_joints_rad_.size())
                 {
                     return;
                 }
                 for (size_t i = 0; i < target_joints_rad_.size(); ++i)
                 {
-                    target_joints_rad_[i] = msg->position[i];
+                    target_joints_rad_[i] = msg->data[i];
                 }
-                joint_state_received_ = true;
                 target_joints_initialized_ = true;
+                waiting_initial_state_ = false;
             });
     }
 
-    syncJointStateOnce(context);
+    auto query_msg = std_msgs::msg::String();
+    query_msg.data = "kg";
+    context->getArmQueryCurrentPub()->publish(query_msg);
+    last_query_time_ = context->now();
+
     last_update_time_ = context->now();
 
     RCLCPP_INFO(
         context->get_logger(),
-        "Entered ARM state: default HIGH_SPEED mode, right-stick-y controls servo %d",
+        "Entered ARM state: sent kg query, waiting current joints, right-stick-y controls servo %d after init",
         right_y_selected_servo_);
 }
 
@@ -257,9 +264,22 @@ void ArmState::update(RobotStateMachineNode *context)
         return;
     }
 
-    syncJointStateOnce(context);
     if (!target_joints_initialized_)
     {
+        const auto now = context->now();
+        if ((now - last_query_time_).seconds() > 0.35)
+        {
+            auto query_msg = std_msgs::msg::String();
+            query_msg.data = "kg";
+            context->getArmQueryCurrentPub()->publish(query_msg);
+            last_query_time_ = now;
+        }
+
+        RCLCPP_WARN_THROTTLE(
+            context->get_logger(),
+            *context->get_clock(),
+            1500,
+            "ARM waiting kg current state, control publish paused.");
         return;
     }
 
@@ -313,33 +333,6 @@ void ArmState::publishJointCommand(RobotStateMachineNode *context)
     auto msg = example_interfaces::msg::Float64MultiArray();
     msg.data.assign(target_joints_rad_.begin(), target_joints_rad_.end());
     context->getArmJointCommandPub()->publish(msg);
-}
-
-void ArmState::syncJointStateOnce(RobotStateMachineNode *context)
-{
-    if (target_joints_initialized_)
-    {
-        return;
-    }
-
-    if (joint_state_received_)
-    {
-        target_joints_initialized_ = true;
-        return;
-    }
-
-    const double center_rad = 135.0 * kPi / 180.0;
-    for (auto &joint : target_joints_rad_)
-    {
-        joint = center_rad;
-    }
-    target_joints_initialized_ = true;
-
-    RCLCPP_WARN_THROTTLE(
-        context->get_logger(),
-        *context->get_clock(),
-        2000,
-        "No /joint_states received yet, using 135deg fallback for arm control.");
 }
 
 void ArmState::applyAxisControl(RobotStateMachineNode *context, double dt)
