@@ -60,7 +60,7 @@
       <origin xyz="0.010156 0.02714 0.027844" rpy="-1.5708 0 0"/>
       <parent link="${prefix}link1"/>
       <child link="${prefix}link2"/>
-      <axis xyz="0 0 -1"/>
+      <axis xyz="0 0 1"/>
       <limit lower="-2.35619" upper="2.35619" effort="10" velocity="1"/>
     </joint>
 
@@ -84,7 +84,7 @@
       <origin xyz="-0.00029081 -0.104 0" rpy="-0.066221 0 0.057239"/>
       <parent link="${prefix}link2"/>
       <child link="${prefix}link3"/>
-      <axis xyz="0 0.066173 -0.99781"/>
+      <axis xyz="0 -0.066173 0.99781"/>
       <limit lower="-2.35619" upper="2.35619" effort="10" velocity="1"/>
     </joint>
 
@@ -132,7 +132,7 @@
       <origin xyz="-0.027689 -0.055272 -0.040046" rpy="1.637 0.023059 0.0015295"/>
       <parent link="${prefix}link4"/>
       <child link="${prefix}link5"/>
-      <axis xyz="0 0 -1"/>
+      <axis xyz="0 0 1"/>
       <limit lower="-2.35619" upper="2.35619" effort="10" velocity="1"/>
     </joint>
   </xacro:macro>
