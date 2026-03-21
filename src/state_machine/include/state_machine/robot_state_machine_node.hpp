@@ -33,7 +33,7 @@ public:
 
     void changeState(uint8_t state_enum);
     uint8_t getStateBeforeMenu() const;
-    uint8_t getStateBeforeEmergency() const;
+    uint8_t getStateBeforeBall() const;
 
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr getChassisCmdPub();
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr getArmCmdPub();
@@ -52,6 +52,7 @@ public:
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr getJointTrajectoryPub();
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr getCameraStartAppPub();
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr getCameraExitAppPub();
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr getCollectorCmdPub();
 
     double getChassisMaxLinearSpeed() const;
     double getChassisMaxAngularSpeed() const;
@@ -95,7 +96,7 @@ private:
     std::map<uint8_t, std::shared_ptr<RobotState>> states_;
     RobotState *current_state_ = nullptr;
     uint8_t state_before_menu_ = 1;
-    uint8_t state_before_emergency_ = 1;
+    uint8_t state_before_ball_ = 1;
 
     struct Parameters
     {
@@ -133,6 +134,7 @@ private:
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr joint_trajectory_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr camera_start_app_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr camera_exit_app_pub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr collector_cmd_pub_;
 
     rclcpp::Subscription<custom_interfaces::msg::ButtonIntent>::SharedPtr button_sub_;
     rclcpp::Subscription<custom_interfaces::msg::JoystickIntent>::SharedPtr joystick_sub_;

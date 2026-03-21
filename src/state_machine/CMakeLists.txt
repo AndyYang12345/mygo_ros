@@ -25,7 +25,7 @@ add_executable(state_machine
   src/states/menu_state.cpp
   src/states/pole_state.cpp
   src/states/vision_task_state.cpp
-  src/states/emergency_state.cpp
+  src/states/ball_state.cpp
 )
 
 add_executable(arm_joint_servo_test_node

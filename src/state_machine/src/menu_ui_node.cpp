@@ -36,7 +36,7 @@ constexpr std::array<int, kOctantCount> kMenuOctantToIndex = {
   0,  // UP -> CHASSIS
   5,  // UP_LEFT -> POLE
   4,  // LEFT -> IDLE
-  2,  // DOWN_LEFT -> EMERGENCY
+  2,  // DOWN_LEFT -> BALL
   0,  // DOWN -> CHASSIS
   1   // DOWN_RIGHT -> ARM
 };
@@ -46,7 +46,7 @@ int menuIndexToOctant(int menu_index)
   static constexpr std::array<int, 6> kMenuIndexToOctant = {
     2,  // CHASSIS
     0,  // ARM
-    5,  // EMERGENCY
+    5,  // BALL
     1,  // VISION_TASK
     4,  // IDLE
     3   // POLE
@@ -70,7 +70,7 @@ const std::array<ModeMenuConfig, 6> kModeMenuConfigs = {{
   {"CHASSIS", {"Home", "NormalDetection", "CylinderSubmission", "CubeSubmission", "CylinderCollection", "CubeCollection", "UnderBridge", "BallSubmission"}, true},
   {"VISION_TASK", {"A_START", "B_CANCEL", "-", "-", "-", "-", "-", "-"}, false},
   {"POLE", {"EXIT_POLE_MODE", "-", "-", "-", "-", "-", "-", "-"}, false},
-  {"EMERGENCY", {"E_STOP", "-", "-", "-", "-", "-", "-", "-"}, false},
+  {"BALL", {"A_NEXT_CMD", "B_BACK", "X_IDLE", "-", "-", "-", "-", "-"}, false},
   {"IDLE", {"WAIT", "-", "-", "-", "-", "-", "-", "-"}, false}
 }};
 
@@ -556,7 +556,7 @@ private:
   double sub_menu_visibility_ = 0.0;
 
   std::vector<std::string> main_labels_ = {
-    "ARM", "VISION_TASK", "CHASSIS", "POLE", "IDLE", "EMERGENCY", "CHASSIS", "ARM"};
+    "ARM", "VISION_TASK", "CHASSIS", "POLE", "IDLE", "BALL", "CHASSIS", "ARM"};
   std::vector<std::string> sub_labels_ = {
     "-", "-", "-", "-", "-", "-", "-", "-"};
 };

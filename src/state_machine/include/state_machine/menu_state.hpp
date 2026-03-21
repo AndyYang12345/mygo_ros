@@ -33,7 +33,7 @@ private:
     const std::vector<std::pair<std::string, uint8_t>> menu_entries_ = {
         {"CHASSIS", 2},
         {"ARM", 3},
-        {"EMERGENCY", 6},
+        {"BALL", 6},
         {"VISION_TASK", 7},
         {"IDLE", 1},
         {"POLE", 5},

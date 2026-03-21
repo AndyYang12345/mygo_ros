@@ -174,7 +174,7 @@ int MenuState::octantToMenuIndex(int octant) const
         0,  // UP -> CHASSIS
         5,  // UP_LEFT -> POLE
         4,  // LEFT -> IDLE
-        2,  // DOWN_LEFT -> EMERGENCY
+        2,  // DOWN_LEFT -> BALL
         0,  // DOWN -> CHASSIS
         1   // DOWN_RIGHT -> ARM
     };

@@ -3,8 +3,8 @@
 #include <chrono>
 
 #include "state_machine/arm_state.hpp"
+#include "state_machine/ball_state.hpp"
 #include "state_machine/chassis_state.hpp"
-#include "state_machine/emergency_state.hpp"
 #include "state_machine/idle_state.hpp"
 #include "state_machine/menu_state.hpp"
 #include "state_machine/pole_state.hpp"
@@ -22,7 +22,7 @@ RobotStateMachineNode::RobotStateMachineNode()
     states_[3] = std::make_shared<ArmState>();
     states_[4] = std::make_shared<MenuState>();
     states_[5] = std::make_shared<PoleState>();
-    states_[6] = std::make_shared<EmergencyState>();
+    states_[6] = std::make_shared<BallState>();
     states_[7] = std::make_shared<VisionTaskState>();
 
     current_state_ = states_[1].get();
@@ -63,7 +63,7 @@ void RobotStateMachineNode::changeState(uint8_t state_enum)
 
     if (state_enum == 6 && current_state_ != nullptr && current_state_->getStateEnum() != 6)
     {
-        state_before_emergency_ = current_state_->getStateEnum();
+        state_before_ball_ = current_state_->getStateEnum();
     }
 
     if (!isTransitionAllowed(current_state_->getStateEnum(), state_enum))
@@ -106,9 +106,9 @@ uint8_t RobotStateMachineNode::getStateBeforeMenu() const
     return state_before_menu_;
 }
 
-uint8_t RobotStateMachineNode::getStateBeforeEmergency() const
+uint8_t RobotStateMachineNode::getStateBeforeBall() const
 {
-    return state_before_emergency_;
+    return state_before_ball_;
 }
 
 rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr RobotStateMachineNode::getChassisCmdPub()
@@ -203,6 +203,11 @@ rclcpp::Publisher<std_msgs::msg::String>::SharedPtr RobotStateMachineNode::getCa
 rclcpp::Publisher<std_msgs::msg::String>::SharedPtr RobotStateMachineNode::getCameraExitAppPub()
 {
     return camera_exit_app_pub_;
+}
+
+rclcpp::Publisher<std_msgs::msg::String>::SharedPtr RobotStateMachineNode::getCollectorCmdPub()
+{
+    return collector_cmd_pub_;
 }
 
 double RobotStateMachineNode::getChassisMaxLinearSpeed() const
@@ -318,6 +323,7 @@ void RobotStateMachineNode::setupPublishers()
         this->create_publisher<trajectory_msgs::msg::JointTrajectory>("/cmd/arm/joint_trajectory", 10);
     camera_start_app_pub_ = this->create_publisher<std_msgs::msg::String>("/cmd/camera/start_app", 10);
     camera_exit_app_pub_ = this->create_publisher<std_msgs::msg::String>("/cmd/camera/exit_app", 10);
+    collector_cmd_pub_ = this->create_publisher<std_msgs::msg::String>("/cmd/collector/ball_submission", 10);
 }
 
 void RobotStateMachineNode::setupSubscribers()
@@ -373,8 +379,7 @@ void RobotStateMachineNode::setupSubscribers()
             const bool lt_pressed =
                 (msg->trigger_id == 0) && (msg->event_type == 1 || msg->value < -0.1F);
 
-            if (lt_pressed && current_state_ && current_state_->getStateEnum() != 4
-                && current_state_->getStateEnum() != 6)
+            if (lt_pressed && current_state_ && current_state_->getStateEnum() != 4)
             {
                 RCLCPP_INFO(this->get_logger(), "LT pressed -> switching to MENU");
                 this->changeState(4);
@@ -454,7 +459,7 @@ bool RobotStateMachineNode::isTransitionAllowed(uint8_t from, uint8_t to)
 
     if (from == 6)
     {
-        return to == state_before_emergency_ || to == 1;
+        return to == state_before_ball_ || to == 1;
     }
 
     if (to == 6)
@@ -513,7 +518,7 @@ uint8_t RobotStateMachineNode::mapSetModeToState(uint8_t target_mode) const
         case 5:
             return 7;  // VISION TASK
         case 6:
-            return 6;  // EMERGENCY
+            return 6;  // BALL
         default:
             return 0;
     }

@@ -33,6 +33,7 @@
 
     <node pkg="robot_hardware_interfaces" exec="arm_serial_node" output="screen"/>
     <node pkg="robot_hardware_interfaces" exec="pole_serial_node" output="screen"/>
+    <node pkg="robot_hardware_interfaces" exec="collector_serial_node" output="screen"/>
 
     <node pkg="robot_hardware_interfaces" exec="commander" output="screen">
         <param name="robot_description"
