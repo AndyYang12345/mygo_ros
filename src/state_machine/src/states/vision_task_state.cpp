@@ -33,6 +33,13 @@ void VisionTaskState::onEnter(RobotStateMachineNode *context)
     context->setMenuItems({"A开始视觉任务", "B结束视觉程序并返回菜单"});
     context->setMenuSelection(0);
 
+    // Send arm initialization command via serial
+    auto arm_cmd = std_msgs::msg::String();
+    arm_cmd.data = "{P1500T1000P1350T1000P2300T1000P1500T1000P1500T1000}";
+    context->getArmQueryCurrentPub()->publish(arm_cmd);
+    RCLCPP_INFO(context->get_logger(), "Sent arm initialization command: %s", arm_cmd.data.c_str());
+
+    // Send camera start application command
     auto camera_start = std_msgs::msg::String();
     camera_start.data = std::string("id:") + kVisionCameraAppId;
     context->getCameraStartAppPub()->publish(camera_start);
