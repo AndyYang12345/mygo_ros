@@ -27,6 +27,4 @@ public:
     void update(RobotStateMachineNode *context) override;
 
 private:
-    bool task_active_ = false;
-    double applyDeadzone(double value, double deadzone) const;
 };
