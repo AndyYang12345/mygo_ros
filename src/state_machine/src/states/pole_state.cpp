@@ -89,7 +89,7 @@ void PoleState::handleJoystick(
 
         auto twist = geometry_msgs::msg::Twist();
         twist.linear.x = y * context->getChassisMaxLinearSpeed();
-        twist.angular.z = -x * context->getChassisMaxAngularSpeed();
+        twist.angular.z = x * context->getChassisMaxAngularSpeed();
         context->getChassisCmdPub()->publish(twist);
         return;
     }

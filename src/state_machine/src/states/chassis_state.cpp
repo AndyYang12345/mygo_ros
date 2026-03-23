@@ -270,7 +270,7 @@ void ChassisState::publishChassisCommand(
 {
     auto twist = geometry_msgs::msg::Twist();
     twist.linear.x = y * context->getChassisMaxLinearSpeed() * speed_multiplier;
-    twist.angular.z = -x * context->getChassisMaxAngularSpeed() * speed_multiplier;
+    twist.angular.z = x * context->getChassisMaxAngularSpeed() * speed_multiplier;
     context->getChassisCmdPub()->publish(twist);
 }
 
@@ -685,7 +685,7 @@ void ChassisState::processChassisControl(RobotStateMachineNode *context, double 
     // 生成Twist消息
     auto twist = geometry_msgs::msg::Twist();
     twist.linear.x = y * context->getChassisMaxLinearSpeed() * speed_scale;
-    twist.angular.z = -x * context->getChassisMaxAngularSpeed() * speed_scale;
+    twist.angular.z = x * context->getChassisMaxAngularSpeed() * speed_scale;
     
     // 发布命令
     context->getChassisCmdPub()->publish(twist);

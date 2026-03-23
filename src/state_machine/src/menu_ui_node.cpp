@@ -12,8 +12,11 @@
 #include <QKeyEvent>
 #include <QMetaObject>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPaintEvent>
 #include <QPen>
+#include <QLinearGradient>
+#include <QRadialGradient>
 #include <QTimer>
 #include <QWidget>
 #include <QString>
@@ -22,6 +25,7 @@
 #include "custom_interfaces/msg/joystick_intent.hpp"
 #include "custom_interfaces/msg/robot_state.hpp"
 #include "custom_interfaces/msg/trigger_intent.hpp"
+#include "geometry_msgs/msg/twist.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/u_int8.hpp"
 
@@ -170,6 +174,29 @@ double smoothApproach(double current, double target, double alpha)
 {
   return current + (target - current) * alpha;
 }
+
+double clampUnit(double value)
+{
+  return std::clamp(value, -1.0, 1.0);
+}
+
+QColor blendColors(const QColor & a, const QColor & b, double t)
+{
+  const double clamped = std::clamp(t, 0.0, 1.0);
+  return QColor(
+    static_cast<int>(std::lround(a.red() + (b.red() - a.red()) * clamped)),
+    static_cast<int>(std::lround(a.green() + (b.green() - a.green()) * clamped)),
+    static_cast<int>(std::lround(a.blue() + (b.blue() - a.blue()) * clamped)),
+    static_cast<int>(std::lround(a.alpha() + (b.alpha() - a.alpha()) * clamped)));
+}
+
+QColor trackPowerColor(double normalized_value)
+{
+  const double magnitude = std::abs(clampUnit(normalized_value));
+  const QColor low(82, 198, 110);
+  const QColor high(239, 78, 54);
+  return blendColors(low, high, std::pow(magnitude, 0.82));
+}
 }  // namespace
 
 class MenuUiWidget : public QWidget
@@ -180,6 +207,13 @@ public:
     setWindowTitle("MyGo Menu UI");
     resize(1480, 860);
     setMinimumSize(1200, 700);
+  }
+
+  void setChassisSpeedLimits(double max_linear_speed, double max_angular_speed)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    max_linear_speed_ = std::max(0.001, max_linear_speed);
+    max_angular_speed_ = std::max(0.001, max_angular_speed);
   }
 
   void updateRobotState(const custom_interfaces::msg::RobotState & msg)
@@ -285,6 +319,20 @@ public:
     pole_locked_state_[1] = (lock_mask & 0x02U) != 0U;
   }
 
+  void updateChassisVelocity(double linear_x, double angular_z)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const double linear_norm = max_linear_speed_ > 1e-6 ?
+      linear_x / max_linear_speed_ : 0.0;
+    const double angular_norm = max_angular_speed_ > 1e-6 ?
+      angular_z / max_angular_speed_ : 0.0;
+
+    chassis_linear_norm_target_ = clampUnit(linear_norm);
+    chassis_turn_norm_target_ = clampUnit(angular_norm);
+    chassis_left_track_target_ = clampUnit(chassis_linear_norm_target_ - chassis_turn_norm_target_);
+    chassis_right_track_target_ = clampUnit(chassis_linear_norm_target_ + chassis_turn_norm_target_);
+  }
+
   bool isLbSubmenuAllowed()
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -309,6 +357,10 @@ protected:
     double sub_menu_radius = 158.0;
     double main_menu_visibility = 0.0;
     double sub_menu_visibility = 0.0;
+    double chassis_linear_norm = 0.0;
+    double chassis_turn_norm = 0.0;
+    double chassis_left_track = 0.0;
+    double chassis_right_track = 0.0;
 
     {
       std::lock_guard<std::mutex> lock(mutex_);
@@ -325,16 +377,32 @@ protected:
       sub_menu_radius = sub_menu_radius_;
       main_menu_visibility = main_menu_visibility_;
       sub_menu_visibility = sub_menu_visibility_;
+
+      chassis_linear_norm_ = smoothApproach(chassis_linear_norm_, chassis_linear_norm_target_, 0.18);
+      chassis_turn_norm_ = smoothApproach(chassis_turn_norm_, chassis_turn_norm_target_, 0.18);
+      chassis_left_track_ = smoothApproach(chassis_left_track_, chassis_left_track_target_, 0.18);
+      chassis_right_track_ = smoothApproach(chassis_right_track_, chassis_right_track_target_, 0.18);
+
+      chassis_linear_norm = chassis_linear_norm_;
+      chassis_turn_norm = chassis_turn_norm_;
+      chassis_left_track = chassis_left_track_;
+      chassis_right_track = chassis_right_track_;
     }
 
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
 
     QLinearGradient bg(0, 0, width(), height());
-    bg.setColorAt(0.0, QColor(245, 248, 255));
-    bg.setColorAt(0.5, QColor(232, 240, 249));
-    bg.setColorAt(1.0, QColor(220, 231, 242));
+    bg.setColorAt(0.0, QColor(245, 249, 255));
+    bg.setColorAt(0.45, QColor(227, 237, 246));
+    bg.setColorAt(1.0, QColor(207, 221, 236));
     painter.fillRect(rect(), bg);
+
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(255, 255, 255, 68));
+    painter.drawEllipse(QPointF(width() * 0.16, height() * 0.18), 180.0, 140.0);
+    painter.setBrush(QColor(120, 158, 191, 34));
+    painter.drawEllipse(QPointF(width() * 0.84, height() * 0.82), 250.0, 180.0);
 
     QFont title_font("Noto Sans CJK SC", 24, QFont::DemiBold);
     QFont sub_title_font("Noto Sans CJK SC", 20, QFont::Medium);
@@ -355,6 +423,7 @@ protected:
     const bool show_pole_cards = (state_name == "POLE");
     const bool show_main_menu = (state_name == "MENU");
     const bool show_sub_menu = (!show_main_menu && submenu_active);
+    const bool show_chassis_dashboard = (state_name == "CHASSIS");
 
     const double target_main_visibility = show_main_menu ? 1.0 : 0.0;
     const double target_sub_visibility = show_sub_menu ? 1.0 : 0.0;
@@ -374,7 +443,20 @@ protected:
       sub_menu_visibility_ = sub_menu_visibility;
     }
 
-    const QPointF center(width() * 0.50, show_pole_cards ? height() * 0.49 : height() * 0.54);
+    const QPointF center = show_chassis_dashboard && show_sub_menu ?
+      QPointF(width() * 0.78, height() * 0.38) :
+      QPointF(width() * 0.50, show_pole_cards ? height() * 0.49 : height() * 0.54);
+
+    if (show_chassis_dashboard) {
+      drawChassisDashboard(
+        painter,
+        QRectF(width() * 0.16, height() * 0.18, width() * 0.68, height() * 0.64),
+        chassis_left_track,
+        chassis_right_track,
+        chassis_linear_norm,
+        chassis_turn_norm,
+        submode_name);
+    }
 
     if (main_menu_visibility > 0.04) {
       drawWheel(
@@ -405,6 +487,275 @@ protected:
   }
 
 private:
+  void drawChassisDashboard(
+    QPainter & painter,
+    const QRectF & panel_rect,
+    double left_track,
+    double right_track,
+    double linear_norm,
+    double turn_norm,
+    const std::string & submode_name)
+  {
+    painter.save();
+
+    QPainterPath panel_path;
+    panel_path.addRoundedRect(panel_rect, 34.0, 34.0);
+
+    QLinearGradient panel_grad(panel_rect.topLeft(), panel_rect.bottomRight());
+    panel_grad.setColorAt(0.0, QColor(252, 254, 255, 236));
+    panel_grad.setColorAt(1.0, QColor(223, 232, 241, 224));
+    painter.fillPath(panel_path, panel_grad);
+    painter.setPen(QPen(QColor(255, 255, 255, 180), 1.2));
+    painter.drawPath(panel_path);
+    painter.setPen(QPen(QColor(77, 105, 132, 92), 2.2));
+    painter.drawRoundedRect(panel_rect.adjusted(1.0, 1.0, -1.0, -1.0), 34.0, 34.0);
+
+    const QRectF title_rect(panel_rect.left() + 28.0, panel_rect.top() + 18.0, panel_rect.width() - 56.0, 40.0);
+    QFont panel_title_font("Noto Sans CJK SC", 18, QFont::DemiBold);
+    QFont panel_info_font("Noto Sans CJK SC", 12, QFont::Medium);
+    painter.setPen(QColor(32, 54, 78));
+    painter.setFont(panel_title_font);
+    painter.drawText(title_rect, Qt::AlignLeft | Qt::AlignVCenter, "底盘姿态");
+
+    const QString submode_text = QString::fromStdString(submode_name.empty() ? "Home" : normalizeLabelForWrap(submode_name));
+    painter.setPen(QColor(82, 109, 132));
+    painter.setFont(panel_info_font);
+    painter.drawText(
+      QRectF(panel_rect.right() - 280.0, panel_rect.top() + 22.0, 240.0, 28.0),
+      Qt::AlignRight | Qt::AlignVCenter,
+      "当前子模式  " + submode_text);
+
+    const QRectF vehicle_rect(
+      panel_rect.center().x() - panel_rect.width() * 0.16,
+      panel_rect.center().y() - panel_rect.height() * 0.24,
+      panel_rect.width() * 0.32,
+      panel_rect.height() * 0.48);
+
+    const qreal bar_width = std::clamp(panel_rect.width() * 0.12, 72.0, 110.0);
+    const qreal bar_height = vehicle_rect.height() * 1.02;
+    const qreal bar_gap = panel_rect.width() * 0.055;
+    const QRectF left_bar_rect(
+      vehicle_rect.left() - bar_gap - bar_width,
+      vehicle_rect.center().y() - bar_height / 2.0,
+      bar_width,
+      bar_height);
+    const QRectF right_bar_rect(
+      vehicle_rect.right() + bar_gap,
+      vehicle_rect.center().y() - bar_height / 2.0,
+      bar_width,
+      bar_height);
+
+    drawTrackPowerBar(painter, left_bar_rect, left_track, "LEFT");
+    drawTrackPowerBar(painter, right_bar_rect, right_track, "RIGHT");
+    drawTrackedVehicle(painter, vehicle_rect, left_track, right_track, linear_norm, turn_norm);
+
+    painter.restore();
+  }
+
+  void drawTrackPowerBar(
+    QPainter & painter,
+    const QRectF & rect,
+    double value,
+    const QString & label)
+  {
+    painter.save();
+
+    const double clamped = clampUnit(value);
+    const QColor accent = trackPowerColor(clamped);
+
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(236, 242, 247, 228));
+    painter.drawRoundedRect(rect, 20.0, 20.0);
+
+    const QRectF channel = rect.adjusted(rect.width() * 0.28, 18.0, -rect.width() * 0.28, -18.0);
+    painter.setBrush(QColor(210, 220, 229, 210));
+    painter.drawRoundedRect(channel, 10.0, 10.0);
+
+    const double center_y = channel.center().y();
+    painter.setPen(QPen(QColor(94, 114, 136, 220), 2.0));
+    painter.drawLine(QPointF(channel.left() - 7.0, center_y), QPointF(channel.right() + 7.0, center_y));
+
+    const double half_height = channel.height() * 0.5;
+    const double fill_height = half_height * std::abs(clamped);
+    QRectF fill_rect(
+      channel.left() + 2.0,
+      clamped >= 0.0 ? center_y - fill_height : center_y,
+      channel.width() - 4.0,
+      fill_height);
+
+    if (fill_rect.height() > 1.0) {
+      QLinearGradient fill_grad(fill_rect.topLeft(), fill_rect.bottomLeft());
+      if (clamped >= 0.0) {
+        fill_grad.setColorAt(0.0, QColor(255, 255, 255, 210));
+        fill_grad.setColorAt(1.0, accent);
+      } else {
+        fill_grad.setColorAt(0.0, accent);
+        fill_grad.setColorAt(1.0, QColor(255, 255, 255, 210));
+      }
+      painter.setPen(Qt::NoPen);
+      painter.setBrush(fill_grad);
+      painter.drawRoundedRect(fill_rect, 8.0, 8.0);
+
+      painter.setBrush(QColor(255, 255, 255, static_cast<int>(80 + std::abs(clamped) * 70.0)));
+      painter.drawRoundedRect(fill_rect.adjusted(2.0, 2.0, -2.0, -2.0), 6.0, 6.0);
+    }
+
+    QFont label_font("Noto Sans CJK SC", 11, QFont::DemiBold);
+    QFont value_font("JetBrains Mono", 12, QFont::Bold);
+    painter.setPen(QColor(61, 80, 100));
+    painter.setFont(label_font);
+    painter.drawText(
+      QRectF(rect.left(), rect.top() - 2.0, rect.width(), 24.0),
+      Qt::AlignCenter | Qt::AlignVCenter,
+      label);
+
+    painter.setFont(value_font);
+    painter.drawText(
+      QRectF(rect.left(), rect.bottom() - 28.0, rect.width(), 22.0),
+      Qt::AlignCenter | Qt::AlignVCenter,
+      QString::number(clamped, 'f', 2));
+
+    painter.restore();
+  }
+
+  void drawTrackedVehicle(
+    QPainter & painter,
+    const QRectF & rect,
+    double left_track,
+    double right_track,
+    double linear_norm,
+    double turn_norm)
+  {
+    painter.save();
+
+    const QColor left_color = trackPowerColor(left_track);
+    const QColor right_color = trackPowerColor(right_track);
+
+    const QRectF shadow_rect = rect.adjusted(-8.0, -2.0, 8.0, 14.0);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(60, 89, 117, 34));
+    painter.drawRoundedRect(shadow_rect, 54.0, 54.0);
+
+    const qreal track_width = rect.width() * 0.18;
+    const qreal body_gap = rect.width() * 0.06;
+    const QRectF left_track_rect(rect.left(), rect.top(), track_width, rect.height());
+    const QRectF right_track_rect(rect.right() - track_width, rect.top(), track_width, rect.height());
+    const QRectF body_rect(
+      left_track_rect.right() + body_gap,
+      rect.top() + rect.height() * 0.09,
+      rect.width() - 2.0 * (track_width + body_gap),
+      rect.height() * 0.82);
+
+    auto drawTrack = [&](const QRectF & track_rect, const QColor & color, bool left_side) {
+      QLinearGradient grad(track_rect.topLeft(), track_rect.bottomRight());
+      grad.setColorAt(0.0, blendColors(color, QColor(255, 255, 255), 0.55));
+      grad.setColorAt(1.0, blendColors(color, QColor(24, 36, 48), 0.35));
+      painter.setBrush(grad);
+      painter.setPen(QPen(QColor(43, 58, 74, 170), 2.0));
+      painter.drawRoundedRect(track_rect, 24.0, 24.0);
+
+      painter.setPen(QPen(QColor(255, 255, 255, 80), 1.0));
+      const double segment_step = track_rect.height() / 7.0;
+      for (int i = 1; i < 7; ++i) {
+        const double y = track_rect.top() + segment_step * i;
+        painter.drawLine(
+          QPointF(track_rect.left() + 7.0, y),
+          QPointF(track_rect.right() - 7.0, y));
+      }
+
+      const QRectF drive_glow = left_side ?
+        QRectF(track_rect.left() - 6.0, track_rect.center().y() - 20.0, 18.0, 40.0) :
+        QRectF(track_rect.right() - 12.0, track_rect.center().y() - 20.0, 18.0, 40.0);
+      painter.setPen(Qt::NoPen);
+      painter.setBrush(QColor(color.red(), color.green(), color.blue(), 90));
+      painter.drawRoundedRect(drive_glow, 8.0, 8.0);
+    };
+
+    drawTrack(left_track_rect, left_color, true);
+    drawTrack(right_track_rect, right_color, false);
+
+    QLinearGradient body_grad(body_rect.topLeft(), body_rect.bottomLeft());
+    body_grad.setColorAt(0.0, QColor(246, 249, 252));
+    body_grad.setColorAt(0.48, QColor(211, 220, 229));
+    body_grad.setColorAt(1.0, QColor(170, 184, 198));
+    painter.setBrush(body_grad);
+    painter.setPen(QPen(QColor(83, 101, 120, 180), 2.2));
+    painter.drawRoundedRect(body_rect, 34.0, 34.0);
+
+    const QRectF cockpit_rect = body_rect.adjusted(
+      body_rect.width() * 0.18, body_rect.height() * 0.14,
+      -body_rect.width() * 0.18, -body_rect.height() * 0.50);
+    QLinearGradient cockpit_grad(cockpit_rect.topLeft(), cockpit_rect.bottomLeft());
+    cockpit_grad.setColorAt(0.0, QColor(108, 133, 157));
+    cockpit_grad.setColorAt(1.0, QColor(56, 79, 100));
+    painter.setBrush(cockpit_grad);
+    painter.setPen(QPen(QColor(224, 236, 247, 150), 1.6));
+    painter.drawRoundedRect(cockpit_rect, 22.0, 22.0);
+
+    const QRectF deck_rect = body_rect.adjusted(
+      body_rect.width() * 0.22, body_rect.height() * 0.44,
+      -body_rect.width() * 0.22, -body_rect.height() * 0.14);
+    painter.setBrush(QColor(232, 238, 244, 185));
+    painter.setPen(QPen(QColor(121, 139, 157, 120), 1.4));
+    painter.drawRoundedRect(deck_rect, 18.0, 18.0);
+
+    const QPointF nose_center(body_rect.center().x(), body_rect.top() + body_rect.height() * 0.15);
+    QPainterPath arrow_path;
+    arrow_path.moveTo(nose_center.x(), nose_center.y() - 26.0);
+    arrow_path.lineTo(nose_center.x() - 14.0, nose_center.y() + 6.0);
+    arrow_path.lineTo(nose_center.x() - 5.0, nose_center.y() + 6.0);
+    arrow_path.lineTo(nose_center.x() - 5.0, nose_center.y() + 26.0);
+    arrow_path.lineTo(nose_center.x() + 5.0, nose_center.y() + 26.0);
+    arrow_path.lineTo(nose_center.x() + 5.0, nose_center.y() + 6.0);
+    arrow_path.lineTo(nose_center.x() + 14.0, nose_center.y() + 6.0);
+    arrow_path.closeSubpath();
+    painter.setBrush(QColor(35, 58, 82, 220));
+    painter.setPen(Qt::NoPen);
+    painter.drawPath(arrow_path);
+
+    QFont metric_label_font("Noto Sans CJK SC", 11, QFont::Medium);
+    QFont metric_value_font("JetBrains Mono", 16, QFont::Bold);
+    painter.setFont(metric_label_font);
+    painter.setPen(QColor(92, 111, 129));
+    painter.drawText(
+      QRectF(rect.left(), rect.bottom() + 18.0, rect.width(), 22.0),
+      Qt::AlignHCenter | Qt::AlignVCenter,
+      "LINEAR / TURN");
+
+    painter.setFont(metric_value_font);
+    painter.setPen(QColor(32, 52, 74));
+    painter.drawText(
+      QRectF(rect.left(), rect.bottom() + 38.0, rect.width(), 26.0),
+      Qt::AlignHCenter | Qt::AlignVCenter,
+      QString("%1 / %2")
+      .arg(linear_norm, 0, 'f', 2)
+      .arg(turn_norm, 0, 'f', 2));
+
+    const qreal indicator_width = rect.width() * 0.34;
+    const QRectF indicator_rect(
+      rect.center().x() - indicator_width / 2.0,
+      rect.bottom() + 78.0,
+      indicator_width,
+      14.0);
+    painter.setBrush(QColor(220, 229, 237, 210));
+    painter.setPen(Qt::NoPen);
+    painter.drawRoundedRect(indicator_rect, 7.0, 7.0);
+
+    const double average_drive = clampUnit((left_track + right_track) * 0.5);
+    const QRectF indicator_fill(
+      indicator_rect.left(),
+      indicator_rect.top(),
+      indicator_rect.width() * (0.5 + average_drive * 0.5),
+      indicator_rect.height());
+    QLinearGradient indicator_grad(indicator_fill.topLeft(), indicator_fill.topRight());
+    indicator_grad.setColorAt(0.0, QColor(90, 196, 120, 140));
+    indicator_grad.setColorAt(1.0, trackPowerColor(average_drive));
+    painter.setBrush(indicator_grad);
+    painter.drawRoundedRect(indicator_fill, 7.0, 7.0);
+
+    painter.restore();
+  }
+
   void drawPoleStatusCards(
     QPainter & painter,
     int selected_pole_id,
@@ -554,6 +905,16 @@ private:
   double sub_menu_radius_ = 158.0;
   double main_menu_visibility_ = 0.0;
   double sub_menu_visibility_ = 0.0;
+  double max_linear_speed_ = 0.5;
+  double max_angular_speed_ = 1.0;
+  double chassis_linear_norm_target_ = 0.0;
+  double chassis_turn_norm_target_ = 0.0;
+  double chassis_left_track_target_ = 0.0;
+  double chassis_right_track_target_ = 0.0;
+  double chassis_linear_norm_ = 0.0;
+  double chassis_turn_norm_ = 0.0;
+  double chassis_left_track_ = 0.0;
+  double chassis_right_track_ = 0.0;
 
   std::vector<std::string> main_labels_ = {
     "ARM", "VISION_TASK", "CHASSIS", "POLE", "IDLE", "BALL", "CHASSIS", "ARM"};
@@ -567,6 +928,12 @@ public:
   explicit MenuUiNode(MenuUiWidget * widget)
   : Node("menu_ui_node"), widget_(widget)
   {
+    const double max_linear_speed = declare_parameter<double>("chassis.max_linear_speed", 0.5);
+    const double max_angular_speed = declare_parameter<double>("chassis.max_angular_speed", 1.0);
+    if (widget_) {
+      widget_->setChassisSpeedLimits(max_linear_speed, max_angular_speed);
+    }
+
     state_sub_ = create_subscription<custom_interfaces::msg::RobotState>(
       "/robot/state", 10,
       [this](const custom_interfaces::msg::RobotState::SharedPtr msg)
@@ -651,6 +1018,16 @@ public:
         widget_->updatePoleLockMask(msg->data);
       });
 
+    chassis_velocity_sub_ = create_subscription<geometry_msgs::msg::Twist>(
+      "/cmd/chassis/velocity", 10,
+      [this](const geometry_msgs::msg::Twist::SharedPtr msg)
+      {
+        if (!msg || !widget_) {
+          return;
+        }
+        widget_->updateChassisVelocity(msg->linear.x, msg->angular.z);
+      });
+
     RCLCPP_INFO(get_logger(), "menu_ui_node started.");
   }
 
@@ -662,6 +1039,7 @@ private:
   rclcpp::Subscription<custom_interfaces::msg::JoystickIntent>::SharedPtr joystick_sub_;
   rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr pole_selected_id_sub_;
   rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr pole_lock_mask_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr chassis_velocity_sub_;
 };
 
 int main(int argc, char ** argv)

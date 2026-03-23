@@ -57,6 +57,7 @@ ament_target_dependencies(arm_joint_servo_test_node
 
 ament_target_dependencies(menu_ui_node
   rclcpp
+  geometry_msgs
   custom_interfaces
 )
 
