@@ -1,11 +1,23 @@
 #include "state_machine/vision_task_state.hpp"
 
+#include <array>
+
+#include "custom_interfaces/msg/arm_joint_target.hpp"
 #include "state_machine/robot_state_machine_node.hpp"
 
 namespace
 {
+constexpr double kPi = 3.14159265358979323846;
 constexpr const char *kVisionCameraAppId = "mygo_pipeline_uart";
 constexpr const char *kExitConfirmWord = "EXIT_NOW";
+constexpr std::array<double, 5> kVisionInitPwms = {
+    1500.0, 1350.0, 2300.0, 1500.0, 1500.0};
+
+double pwmToRad(double pwm)
+{
+    const double degree = (pwm - 1500.0) / 1000.0 * 135.0;
+    return degree * kPi / 180.0;
+}
 }
 
 std::string VisionTaskState::getName() const
@@ -28,10 +40,21 @@ void VisionTaskState::onEnter(RobotStateMachineNode *context)
     context->setMenuItems({"B结束视觉程序并返回菜单"});
     context->setMenuSelection(0);
 
-    auto arm_cmd = std_msgs::msg::String();
-    arm_cmd.data = "{P1500T1000P1350T1000P2300T1000P1500T1000P1500T1000}";
-    context->getArmQueryCurrentPub()->publish(arm_cmd);
-    RCLCPP_INFO(context->get_logger(), "Sent arm init command: %s", arm_cmd.data.c_str());
+    auto arm_target = custom_interfaces::msg::ArmJointTarget();
+    arm_target.joints.reserve(kVisionInitPwms.size());
+    for (const double pwm : kVisionInitPwms)
+    {
+        arm_target.joints.push_back(pwmToRad(pwm));
+    }
+    context->getArmJointTargetPub()->publish(arm_target);
+    RCLCPP_INFO(
+        context->get_logger(),
+        "Sent vision arm init joint target: [%.3f, %.3f, %.3f, %.3f, %.3f]",
+        arm_target.joints[0],
+        arm_target.joints[1],
+        arm_target.joints[2],
+        arm_target.joints[3],
+        arm_target.joints[4]);
 
     auto camera_start = std_msgs::msg::String();
     camera_start.data = std::string("id:") + kVisionCameraAppId;
