@@ -22,6 +22,7 @@ std::vector<std::string> MenuState::getAvailableModes() const
 void MenuState::onEnter(RobotStateMachineNode *context)
 {
     trigger_pressed_ = false;
+    selection_touched_ = false;
     selection_index_ = 0;
     last_activity_ = context->now();
     refreshMenuState(context);
@@ -54,6 +55,11 @@ void MenuState::handleTrigger(
     if (!currently_pressed && trigger_pressed_)
     {
         trigger_pressed_ = false;
+        if (!selection_touched_)
+        {
+            context->changeState(context->getStateBeforeMenu());
+            return;
+        }
         const uint8_t target_state = menu_entries_[selection_index_].second;
         context->changeState(target_state);
     }
@@ -88,11 +94,12 @@ void MenuState::handleJoystick(
     const float norm_y = y;
     const float angle_rad = std::atan2(norm_y, norm_x);
     const float angle_deg = angle_rad * 180.0F / kPi;
+    selection_touched_ = true;
+    last_activity_ = context->now();
 
     if (new_index != selection_index_)
     {
         selection_index_ = new_index;
-        last_activity_ = context->now();
         refreshMenuState(context);
         RCLCPP_INFO(
             context->get_logger(),

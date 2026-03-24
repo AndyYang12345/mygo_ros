@@ -197,6 +197,15 @@ QColor trackPowerColor(double normalized_value)
   const QColor high(239, 78, 54);
   return blendColors(low, high, std::pow(magnitude, 0.82));
 }
+
+double easeOutBack(double t)
+{
+  const double clamped = std::clamp(t, 0.0, 1.0);
+  constexpr double c1 = 1.70158;
+  constexpr double c3 = c1 + 1.0;
+  const double x = clamped - 1.0;
+  return 1.0 + c3 * x * x * x + c1 * x * x;
+}
 }  // namespace
 
 class MenuUiWidget : public QWidget
@@ -443,9 +452,12 @@ protected:
       sub_menu_visibility_ = sub_menu_visibility;
     }
 
-    const QPointF center = show_chassis_dashboard && show_sub_menu ?
-      QPointF(width() * 0.78, height() * 0.38) :
-      QPointF(width() * 0.50, show_pole_cards ? height() * 0.49 : height() * 0.54);
+    const QPointF overlay_center(width() * 0.50, height() * 0.54);
+    const double menu_overlay_visibility = std::max(main_menu_visibility, sub_menu_visibility);
+    const double main_menu_anim = easeOutBack(main_menu_visibility);
+    const double sub_menu_anim = easeOutBack(sub_menu_visibility);
+    const double main_scale = 0.82 + 0.18 * main_menu_anim;
+    const double sub_scale = 0.82 + 0.18 * sub_menu_anim;
 
     if (show_chassis_dashboard) {
       drawChassisDashboard(
@@ -458,18 +470,22 @@ protected:
         submode_name);
     }
 
+    if (menu_overlay_visibility > 0.04) {
+      drawBackdropBlur(painter, menu_overlay_visibility);
+    }
+
     if (main_menu_visibility > 0.04) {
       drawWheel(
-        painter, center, main_menu_radius, left_labels, main_octant,
+        painter, overlay_center, main_menu_radius, left_labels, main_octant,
         show_main_menu, QColor(32, 90, 154), QColor(11, 46, 86), QColor(239, 247, 255), main_menu_visibility,
-        "主菜单");
+        "主菜单", main_scale);
     }
 
     if (sub_menu_visibility > 0.04) {
       drawWheel(
-        painter, center, sub_menu_radius, right_labels, sub_octant,
+        painter, overlay_center, sub_menu_radius, right_labels, sub_octant,
         show_sub_menu, QColor(103, 130, 60), QColor(52, 85, 30), QColor(246, 252, 238), sub_menu_visibility,
-        "子菜单");
+        "子菜单", sub_scale);
     }
 
     if (show_pole_cards) {
@@ -487,6 +503,42 @@ protected:
   }
 
 private:
+  void drawBackdropBlur(QPainter & painter, double visibility)
+  {
+    painter.save();
+
+    const double intensity = std::clamp(visibility, 0.0, 1.0);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(224, 232, 240, static_cast<int>(90 + 90 * intensity)));
+    painter.drawRect(rect());
+
+    const std::array<QPointF, 3> glow_centers = {
+      QPointF(width() * 0.22, height() * 0.28),
+      QPointF(width() * 0.72, height() * 0.24),
+      QPointF(width() * 0.56, height() * 0.76)};
+    const std::array<QColor, 3> glow_colors = {
+      QColor(255, 255, 255, 74),
+      QColor(120, 158, 191, 52),
+      QColor(83, 133, 188, 38)};
+
+    for (size_t i = 0; i < glow_centers.size(); ++i) {
+      QRadialGradient glow(glow_centers[i], std::max(width(), height()) * 0.26);
+      QColor inner = glow_colors[i];
+      inner.setAlpha(static_cast<int>(inner.alpha() * intensity));
+      QColor outer = glow_colors[i];
+      outer.setAlpha(0);
+      glow.setColorAt(0.0, inner);
+      glow.setColorAt(1.0, outer);
+      painter.setBrush(glow);
+      painter.drawEllipse(glow_centers[i], width() * 0.22, height() * 0.18);
+    }
+
+    const QRectF focus_rect(width() * 0.16, height() * 0.18, width() * 0.68, height() * 0.68);
+    painter.setBrush(QColor(255, 255, 255, static_cast<int>(24 + 30 * intensity)));
+    painter.drawRoundedRect(focus_rect, 36.0, 36.0);
+    painter.restore();
+  }
+
   void drawChassisDashboard(
     QPainter & painter,
     const QRectF & panel_rect,
@@ -766,7 +818,7 @@ private:
     const int gap = 24;
     const int total_width = card_width * 2 + gap;
     const int origin_x = (width() - total_width) / 2;
-    const int origin_y = static_cast<int>(height() * 0.82);
+    const int origin_y = static_cast<int>(height() * 0.54) - card_height / 2;
 
     const std::array<QString, 2> names = {"LEFT", "RIGHT"};
 
@@ -813,10 +865,14 @@ private:
     const QColor & active_color,
     const QColor & fill_color,
     double visibility,
-    const QString & title)
+    const QString & title,
+    double scale)
   {
     painter.save();
     painter.setOpacity(std::clamp(visibility, 0.0, 1.0));
+    painter.translate(center);
+    painter.scale(std::clamp(scale, 0.7, 1.05), std::clamp(scale, 0.7, 1.05));
+    painter.translate(-center);
 
     QColor ring = base_color;
     ring.setAlpha(190);

@@ -41,6 +41,7 @@ private:
 
     int selection_index_ = 0;
     bool trigger_pressed_ = false;
+    bool selection_touched_ = false;
     rclcpp::Time last_activity_;
 
     void refreshMenuState(RobotStateMachineNode* context);
