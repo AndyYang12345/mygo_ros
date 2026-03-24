@@ -49,7 +49,7 @@ public:
 		gripper_motion_time_ms_ = this->declare_parameter<int>("gripper_motion_time_ms", 1000);
 		direct_joint_time_ms_ = this->declare_parameter<int>("direct_joint_time_ms", 1000);
 		gripper_open_degree_ = this->declare_parameter<double>("gripper_open_degree", 180.0);
-		gripper_close_degree_ = this->declare_parameter<double>("gripper_close_degree", 0.0);
+		gripper_close_degree_ = this->declare_parameter<double>("gripper_close_degree", 90.0);
 		arm_joint_names_ = this->declare_parameter<std::vector<std::string>>(
 			"arm_joint_names",
 			std::vector<std::string>{});

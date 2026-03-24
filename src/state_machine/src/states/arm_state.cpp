@@ -237,15 +237,15 @@ void ArmState::handleJoystick(
 
         if (!dpad_switch_latched_ && y >= threshold)
         {
-            right_y_selected_servo_ = 2;
-            dpad_switch_latched_ = true;
-            RCLCPP_INFO(context->get_logger(), "ARM right-stick-y target switched to servo 2");
-        }
-        else if (!dpad_switch_latched_ && y <= -threshold)
-        {
             right_y_selected_servo_ = 3;
             dpad_switch_latched_ = true;
             RCLCPP_INFO(context->get_logger(), "ARM right-stick-y target switched to servo 3");
+        }
+        else if (!dpad_switch_latched_ && y <= -threshold)
+        {
+            right_y_selected_servo_ = 2;
+            dpad_switch_latched_ = true;
+            RCLCPP_INFO(context->get_logger(), "ARM right-stick-y target switched to servo 2");
         }
         else if (std::abs(y) < reset_threshold)
         {
@@ -475,4 +475,3 @@ bool ArmState::applyAxisControl(RobotStateMachineNode *context, double dt)
 
     return changed;
 }
-
