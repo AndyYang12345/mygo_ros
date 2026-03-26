@@ -48,8 +48,14 @@ public:
 		min_segment_time_ms_ = this->declare_parameter<int>("min_segment_time_ms", 20);
 		gripper_motion_time_ms_ = this->declare_parameter<int>("gripper_motion_time_ms", 1000);
 		direct_joint_time_ms_ = this->declare_parameter<int>("direct_joint_time_ms", 1000);
-		gripper_open_degree_ = this->declare_parameter<double>("gripper_open_degree", 180.0);
-		gripper_close_degree_ = this->declare_parameter<double>("gripper_close_degree", 90.0);
+		gripper_open_pwm_ = static_cast<int>(std::lround(clamp(
+			this->declare_parameter<double>("gripper_open_pwm", 1800.0),
+			500.0,
+			2500.0)));
+		gripper_close_pwm_ = static_cast<int>(std::lround(clamp(
+			this->declare_parameter<double>("gripper_close_pwm", 2000.0),
+			500.0,
+			2500.0)));
 		arm_joint_names_ = this->declare_parameter<std::vector<std::string>>(
 			"arm_joint_names",
 			std::vector<std::string>{});
@@ -669,9 +675,7 @@ private:
 			return;
 		}
 
-		const double degree = msg->open ? gripper_open_degree_ : gripper_close_degree_;
-		const int pwm = angleDegreeToPwm(degree);
-		last_gripper_pwm_ = pwm;
+		last_gripper_pwm_ = msg->open ? gripper_open_pwm_ : gripper_close_pwm_;
 		const auto payload = formatGripperCommand(last_gripper_pwm_, gripper_motion_time_ms_);
         RCLCPP_INFO(this->get_logger(), "Formatted gripper frame: %s", payload.c_str());
 		if (!sender_->send(payload)) {
@@ -685,8 +689,8 @@ private:
 	int min_segment_time_ms_;
 	int gripper_motion_time_ms_;
 	int direct_joint_time_ms_;
-	double gripper_open_degree_;
-	double gripper_close_degree_;
+	int gripper_open_pwm_;
+	int gripper_close_pwm_;
 	std::vector<std::string> arm_joint_names_;
 
 	std::unique_ptr<SendCommand> sender_;
