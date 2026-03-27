@@ -1,7 +1,13 @@
 #include "state_machine/arm_state.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <ctime>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
 
 #include "custom_interfaces/msg/arm_named_target.hpp"
 #include "custom_interfaces/msg/gripper_command.hpp"
@@ -15,13 +21,48 @@ constexpr int kButtonLB = 4;
 constexpr int kButtonRB = 5;
 constexpr uint8_t kPressEvent = 0;
 constexpr uint8_t kReleaseEvent = 1;
+constexpr size_t kArmJointCount = 5;
 const char *kOctantNames[8] = {
     "RIGHT", "UP_RIGHT", "UP", "UP_LEFT", "LEFT", "DOWN_LEFT", "DOWN", "DOWN_RIGHT"};
+const std::array<const char *, kArmJointCount> kArmJointNames = {
+    "joint1", "joint2", "joint3", "joint4", "joint5"};
 
 double pwmToRad(double pwm)
 {
     const double degree = (pwm - 1500.0) / 1000.0 * 135.0;
     return degree * static_cast<double>(kPi) / 180.0;
+}
+
+double radToDeg(double rad)
+{
+    return rad * 180.0 / static_cast<double>(kPi);
+}
+
+std::filesystem::path poseSnapshotDir()
+{
+    const auto source_path = std::filesystem::path(__FILE__);
+    return source_path.parent_path().parent_path().parent_path() / "debug" / "arm_pose_snapshots";
+}
+
+std::pair<std::string, std::string> makeSnapshotTimestamps()
+{
+    const auto now = std::chrono::system_clock::now();
+    const auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(
+        now.time_since_epoch()) % 1000;
+    const std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+
+    std::tm local_tm{};
+    localtime_r(&now_time, &local_tm);
+
+    std::ostringstream file_stamp;
+    file_stamp << std::put_time(&local_tm, "%Y%m%d_%H%M%S")
+               << '_' << std::setw(3) << std::setfill('0') << millis.count();
+
+    std::ostringstream display_stamp;
+    display_stamp << std::put_time(&local_tm, "%Y-%m-%d %H:%M:%S")
+                  << '.' << std::setw(3) << std::setfill('0') << millis.count();
+
+    return {file_stamp.str(), display_stamp.str()};
 }
 }
 
@@ -161,10 +202,7 @@ void ArmState::handleButton(
 
     if (msg->button_id == 0)
     {
-        auto gripper_cmd = custom_interfaces::msg::GripperCommand();
-        gripper_cmd.open = false;
-        gripper_open_ = false;
-        context->getArmGripperCmdPub()->publish(gripper_cmd);
+        savePoseSnapshot(context);
         return;
     }
 
@@ -419,6 +457,93 @@ void ArmState::publishDirectPwmCommand(RobotStateMachineNode *context)
     auto msg = example_interfaces::msg::Float64MultiArray();
     msg.data.assign(target_pwms_.begin(), target_pwms_.end());
     context->getArmDirectPwmPub()->publish(msg);
+}
+
+void ArmState::savePoseSnapshot(RobotStateMachineNode *context)
+{
+    if (!latest_feedback_valid_)
+    {
+        auto query_msg = std_msgs::msg::String();
+        query_msg.data = "kg";
+        context->getArmQueryCurrentPub()->publish(query_msg);
+        last_query_time_ = context->now();
+
+        RCLCPP_WARN(
+            context->get_logger(),
+            "ARM pose snapshot skipped: no current hardware feedback yet, requested kg refresh.");
+        return;
+    }
+
+    const auto [file_stamp, display_stamp] = makeSnapshotTimestamps();
+    const auto output_dir = poseSnapshotDir();
+    std::error_code ec;
+    std::filesystem::create_directories(output_dir, ec);
+    if (ec)
+    {
+        RCLCPP_ERROR(
+            context->get_logger(),
+            "Failed to create arm pose snapshot dir %s: %s",
+            output_dir.c_str(),
+            ec.message().c_str());
+        return;
+    }
+
+    const auto output_path = output_dir / ("arm_pose_" + file_stamp + ".md");
+    std::ofstream out(output_path);
+    if (!out.is_open())
+    {
+        RCLCPP_ERROR(
+            context->get_logger(),
+            "Failed to open arm pose snapshot file: %s",
+            output_path.c_str());
+        return;
+    }
+
+    out << "# Arm Pose Snapshot\n\n";
+    out << "- Timestamp: " << display_stamp << "\n";
+    out << "- Source: `/arm/current_pwm` feedback converted to angles\n";
+    out << "- State: ARM\n";
+    out << "- Precision Mode: " << (precision_mode_ ? "ON" : "OFF") << "\n";
+    out << "- Right Stick Y Servo: " << right_y_selected_servo_ << "\n\n";
+
+    out << "## Joint Table\n\n";
+    out << "| Servo ID | Joint | Angle (deg) | Angle (rad) |\n";
+    out << "| --- | --- | ---: | ---: |\n";
+    for (size_t i = 0; i < latest_feedback_joints_rad_.size(); ++i)
+    {
+        out << "| " << i
+            << " | " << kArmJointNames[i]
+            << " | " << std::fixed << std::setprecision(2) << radToDeg(latest_feedback_joints_rad_[i])
+            << " | " << std::fixed << std::setprecision(4) << latest_feedback_joints_rad_[i]
+            << " |\n";
+    }
+
+    out << "\n## MoveIt2 Copy Block\n\n";
+    out << "```yaml\n";
+    for (size_t i = 0; i < latest_feedback_joints_rad_.size(); ++i)
+    {
+        out << kArmJointNames[i] << ": "
+            << std::fixed << std::setprecision(4) << latest_feedback_joints_rad_[i] << '\n';
+    }
+    out << "```\n\n";
+
+    out << "## Joint Vector\n\n";
+    out << "```text\n[";
+    for (size_t i = 0; i < latest_feedback_joints_rad_.size(); ++i)
+    {
+        if (i > 0)
+        {
+            out << ", ";
+        }
+        out << std::fixed << std::setprecision(4) << latest_feedback_joints_rad_[i];
+    }
+    out << "]\n```\n";
+    out.close();
+
+    RCLCPP_INFO(
+        context->get_logger(),
+        "ARM pose snapshot saved: %s",
+        output_path.c_str());
 }
 
 bool ArmState::applyAxisControl(RobotStateMachineNode *context, double dt)

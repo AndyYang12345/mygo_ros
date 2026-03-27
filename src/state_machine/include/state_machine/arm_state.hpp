@@ -38,6 +38,7 @@ private:
   void publishJointCommand(RobotStateMachineNode * context);
   void publishDirectPwmCommand(RobotStateMachineNode * context);
   bool applyAxisControl(RobotStateMachineNode * context, double dt);
+  void savePoseSnapshot(RobotStateMachineNode * context);
 
   std::vector<std::string> presets_ = {
     "pickup_right",
