@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <mutex>
@@ -9,6 +10,7 @@
 
 #include <QApplication>
 #include <QFont>
+#include <QFontMetrics>
 #include <QKeyEvent>
 #include <QMetaObject>
 #include <QPainter>
@@ -27,6 +29,7 @@
 #include "custom_interfaces/msg/trigger_intent.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/string.hpp"
 #include "std_msgs/msg/u_int8.hpp"
 
 namespace {
@@ -198,6 +201,99 @@ QColor trackPowerColor(double normalized_value)
   return blendColors(low, high, std::pow(magnitude, 0.82));
 }
 
+std::string cameraStatusText(const std::string & raw, const std::string & fallback = "UNKNOWN")
+{
+  if (raw.empty()) {
+    return fallback;
+  }
+  return normalizeLabelForWrap(raw);
+}
+
+QColor cameraConnectionColor(const std::string & state)
+{
+  if (state == "CONNECTED") {
+    return QColor(34, 160, 86);
+  }
+  if (state == "CONNECTING") {
+    return QColor(214, 142, 28);
+  }
+  return QColor(210, 72, 64);
+}
+
+QColor cameraAppStateColor(const std::string & state)
+{
+  if (state == "RUNNING") {
+    return QColor(34, 160, 86);
+  }
+  if (state == "IDLE") {
+    return QColor(38, 116, 188);
+  }
+  if (state == "STOPPED") {
+    return QColor(214, 142, 28);
+  }
+  return QColor(210, 72, 64);
+}
+
+QColor cameraTrackStateColor(const std::string & state)
+{
+  if (state == "Tracking") {
+    return QColor(34, 160, 86);
+  }
+  if (state == "Locked") {
+    return QColor(214, 142, 28);
+  }
+  if (state == "Searching") {
+    return QColor(38, 116, 188);
+  }
+  if (state == "Waiting" || state == "Stopped") {
+    return QColor(112, 128, 148);
+  }
+  return QColor(210, 72, 64);
+}
+
+QString cameraSummaryText(
+  const std::string & connection_state,
+  const std::string & app_state,
+  const std::string & track_state)
+{
+  if (connection_state != "CONNECTED") {
+    return "Camera Offline";
+  }
+  if (app_state == "RUNNING" && track_state == "Tracking") {
+    return "Target Tracking";
+  }
+  if (app_state == "RUNNING") {
+    return "Vision Active";
+  }
+  if (app_state == "STOPPED") {
+    return "Task Stopped";
+  }
+  if (app_state == "IDLE") {
+    return "Ready For Start";
+  }
+  return "Camera Online";
+}
+
+QColor cameraSummaryColor(
+  const std::string & connection_state,
+  const std::string & app_state,
+  const std::string & track_state)
+{
+  if (connection_state != "CONNECTED") {
+    return QColor(210, 72, 64);
+  }
+  if (app_state == "RUNNING" && track_state == "Tracking") {
+    return QColor(34, 160, 86);
+  }
+  if (app_state == "RUNNING") {
+    return QColor(38, 116, 188);
+  }
+  if (app_state == "STOPPED") {
+    return QColor(214, 142, 28);
+  }
+  return QColor(38, 116, 188);
+}
+
 double easeOutBack(double t)
 {
   const double clamped = std::clamp(t, 0.0, 1.0);
@@ -342,6 +438,30 @@ public:
     chassis_right_track_target_ = clampUnit(chassis_linear_norm_target_ + chassis_turn_norm_target_);
   }
 
+  void updateCameraConnectionState(const std::string & state)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    camera_connection_state_ = state.empty() ? "DISCONNECTED" : state;
+  }
+
+  void updateCameraAppState(const std::string & state)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    camera_app_state_ = state.empty() ? "UNKNOWN" : state;
+  }
+
+  void updateCameraTrackState(const std::string & state)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    camera_track_state_ = state.empty() ? "UNKNOWN" : state;
+  }
+
+  void updateCameraProtocolStatus(const std::string & text)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    camera_protocol_status_ = text.empty() ? "waiting for camera node" : text;
+  }
+
   bool isLbSubmenuAllowed()
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -370,6 +490,10 @@ protected:
     double chassis_turn_norm = 0.0;
     double chassis_left_track = 0.0;
     double chassis_right_track = 0.0;
+    std::string camera_connection_state;
+    std::string camera_app_state;
+    std::string camera_track_state;
+    std::string camera_protocol_status;
 
     {
       std::lock_guard<std::mutex> lock(mutex_);
@@ -396,6 +520,10 @@ protected:
       chassis_turn_norm = chassis_turn_norm_;
       chassis_left_track = chassis_left_track_;
       chassis_right_track = chassis_right_track_;
+      camera_connection_state = camera_connection_state_;
+      camera_app_state = camera_app_state_;
+      camera_track_state = camera_track_state_;
+      camera_protocol_status = camera_protocol_status_;
     }
 
     QPainter painter(this);
@@ -428,6 +556,15 @@ protected:
     painter.setPen(QColor(18, 79, 122));
     painter.setFont(sub_title_font);
     painter.drawText(QRect(28, 64, width() - 56, 42), Qt::AlignLeft | Qt::AlignVCenter, mode_text);
+
+    const double camera_panel_width = std::clamp(width() * 0.27, 320.0, 390.0);
+    drawCameraStatusPanel(
+      painter,
+      QRectF(width() - camera_panel_width - 28.0, 26.0, camera_panel_width, 214.0),
+      camera_connection_state,
+      camera_app_state,
+      camera_track_state,
+      camera_protocol_status);
 
     const bool show_pole_cards = (state_name == "POLE");
     const bool show_main_menu = (state_name == "MENU");
@@ -854,6 +991,102 @@ private:
     }
   }
 
+  void drawCameraStatusPanel(
+    QPainter & painter,
+    const QRectF & panel_rect,
+    const std::string & connection_state,
+    const std::string & app_state,
+    const std::string & track_state,
+    const std::string & protocol_status)
+  {
+    painter.save();
+
+    QPainterPath panel_path;
+    panel_path.addRoundedRect(panel_rect, 28.0, 28.0);
+
+    QLinearGradient panel_grad(panel_rect.topLeft(), panel_rect.bottomRight());
+    panel_grad.setColorAt(0.0, QColor(21, 45, 66, 242));
+    panel_grad.setColorAt(0.5, QColor(20, 66, 97, 232));
+    panel_grad.setColorAt(1.0, QColor(11, 27, 43, 242));
+    painter.fillPath(panel_path, panel_grad);
+    painter.setPen(QPen(QColor(220, 241, 255, 110), 1.4));
+    painter.drawPath(panel_path);
+
+    const QColor summary_color = cameraSummaryColor(connection_state, app_state, track_state);
+    const QColor connection_color = cameraConnectionColor(connection_state);
+    const QColor app_color = cameraAppStateColor(app_state);
+    const QColor track_color = cameraTrackStateColor(track_state);
+
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(summary_color.red(), summary_color.green(), summary_color.blue(), 46));
+    painter.drawEllipse(panel_rect.topRight() - QPointF(56.0, -34.0), 44.0, 44.0);
+
+    QFont title_font("Noto Sans CJK SC", 13, QFont::DemiBold);
+    QFont headline_font("Noto Sans CJK SC", 20, QFont::Bold);
+    QFont label_font("Noto Sans CJK SC", 10, QFont::Medium);
+    QFont value_font("JetBrains Mono", 11, QFont::Bold);
+    QFont foot_font("Noto Sans CJK SC", 10, QFont::Medium);
+
+    painter.setPen(QColor(208, 230, 247));
+    painter.setFont(title_font);
+    painter.drawText(
+      QRectF(panel_rect.left() + 22.0, panel_rect.top() + 18.0, panel_rect.width() - 44.0, 22.0),
+      Qt::AlignLeft | Qt::AlignVCenter,
+      "CAMERA LINK");
+
+    painter.setPen(summary_color);
+    painter.setFont(headline_font);
+    painter.drawText(
+      QRectF(panel_rect.left() + 22.0, panel_rect.top() + 42.0, panel_rect.width() - 96.0, 34.0),
+      Qt::AlignLeft | Qt::AlignVCenter,
+      cameraSummaryText(connection_state, app_state, track_state));
+
+    painter.setBrush(summary_color);
+    painter.drawEllipse(QPointF(panel_rect.right() - 36.0, panel_rect.top() + 34.0), 7.0, 7.0);
+
+    const auto draw_status_row =
+      [&](double y, const QString & label, const std::string & value, const QColor & color) {
+        const QRectF row_rect(panel_rect.left() + 18.0, y, panel_rect.width() - 36.0, 30.0);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(255, 255, 255, 20));
+        painter.drawRoundedRect(row_rect, 12.0, 12.0);
+
+        painter.setPen(QColor(188, 212, 229));
+        painter.setFont(label_font);
+        painter.drawText(
+          QRectF(row_rect.left() + 14.0, row_rect.top(), 66.0, row_rect.height()),
+          Qt::AlignLeft | Qt::AlignVCenter,
+          label);
+
+        const QString value_text = QString::fromStdString(cameraStatusText(value));
+        const QFontMetrics value_fm(value_font);
+        const QString elided_value =
+          value_fm.elidedText(value_text, Qt::ElideRight, static_cast<int>(row_rect.width() - 118.0));
+        painter.setPen(color);
+        painter.setFont(value_font);
+        painter.drawText(
+          QRectF(row_rect.left() + 92.0, row_rect.top(), row_rect.width() - 106.0, row_rect.height()),
+          Qt::AlignLeft | Qt::AlignVCenter,
+          elided_value);
+      };
+
+    draw_status_row(panel_rect.top() + 92.0, "LINK", connection_state, connection_color);
+    draw_status_row(panel_rect.top() + 126.0, "APP", app_state, app_color);
+    draw_status_row(panel_rect.top() + 160.0, "TRACK", track_state, track_color);
+
+    const QRectF foot_rect(panel_rect.left() + 18.0, panel_rect.bottom() - 44.0, panel_rect.width() - 36.0, 26.0);
+    painter.setPen(QColor(176, 202, 220));
+    painter.setFont(foot_font);
+    const QString foot_text = QString::fromStdString(protocol_status.empty() ? "waiting for camera node" : protocol_status);
+    const QFontMetrics foot_fm(foot_font);
+    painter.drawText(
+      foot_rect,
+      Qt::AlignLeft | Qt::AlignVCenter,
+      foot_fm.elidedText(foot_text, Qt::ElideRight, static_cast<int>(foot_rect.width())));
+
+    painter.restore();
+  }
+
   void drawWheel(
     QPainter & painter,
     const QPointF & center,
@@ -971,6 +1204,10 @@ private:
   double chassis_turn_norm_ = 0.0;
   double chassis_left_track_ = 0.0;
   double chassis_right_track_ = 0.0;
+  std::string camera_connection_state_ = "DISCONNECTED";
+  std::string camera_app_state_ = "DISCONNECTED";
+  std::string camera_track_state_ = "DISCONNECTED";
+  std::string camera_protocol_status_ = "waiting for camera node";
 
   std::vector<std::string> main_labels_ = {
     "ARM", "VISION_TASK", "CHASSIS", "POLE", "IDLE", "BALL", "CHASSIS", "ARM"};
@@ -1084,6 +1321,46 @@ public:
         widget_->updateChassisVelocity(msg->linear.x, msg->angular.z);
       });
 
+    camera_connection_sub_ = create_subscription<std_msgs::msg::String>(
+      "/status/camera/connection", 10,
+      [this](const std_msgs::msg::String::SharedPtr msg)
+      {
+        if (!msg || !widget_) {
+          return;
+        }
+        widget_->updateCameraConnectionState(msg->data);
+      });
+
+    camera_app_state_sub_ = create_subscription<std_msgs::msg::String>(
+      "/status/camera/vision_app_state", 10,
+      [this](const std_msgs::msg::String::SharedPtr msg)
+      {
+        if (!msg || !widget_) {
+          return;
+        }
+        widget_->updateCameraAppState(msg->data);
+      });
+
+    camera_track_state_sub_ = create_subscription<std_msgs::msg::String>(
+      "/status/camera/vision_track_state", 10,
+      [this](const std_msgs::msg::String::SharedPtr msg)
+      {
+        if (!msg || !widget_) {
+          return;
+        }
+        widget_->updateCameraTrackState(msg->data);
+      });
+
+    camera_protocol_sub_ = create_subscription<std_msgs::msg::String>(
+      "/status/camera/protocol", 10,
+      [this](const std_msgs::msg::String::SharedPtr msg)
+      {
+        if (!msg || !widget_) {
+          return;
+        }
+        widget_->updateCameraProtocolStatus(msg->data);
+      });
+
     RCLCPP_INFO(get_logger(), "menu_ui_node started.");
   }
 
@@ -1096,6 +1373,10 @@ private:
   rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr pole_selected_id_sub_;
   rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr pole_lock_mask_sub_;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr chassis_velocity_sub_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr camera_connection_sub_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr camera_app_state_sub_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr camera_track_state_sub_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr camera_protocol_sub_;
 };
 
 int main(int argc, char ** argv)
