@@ -79,6 +79,19 @@ install(TARGETS camera_serial_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
+add_executable(vision_bluetooth_bridge_node
+  src/vision_bluetooth_bridge_node.cpp
+  src/serial_port.cpp
+)
+target_include_directories(vision_bluetooth_bridge_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
+target_compile_features(vision_bluetooth_bridge_node PUBLIC c_std_99 cxx_std_17)
+
+install(TARGETS vision_bluetooth_bridge_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 add_executable(collector_serial_node
   src/collector_serial_node.cpp
   src/send_command.cpp
@@ -138,6 +151,15 @@ ament_target_dependencies(pole_serial_node
 ament_target_dependencies(camera_serial_node
   rclcpp
   std_msgs
+  example_interfaces
+  custom_interfaces
+)
+
+ament_target_dependencies(vision_bluetooth_bridge_node
+  rclcpp
+  std_msgs
+  example_interfaces
+  custom_interfaces
 )
 
 ament_target_dependencies(collector_serial_node

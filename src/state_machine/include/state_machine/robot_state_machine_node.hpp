@@ -52,6 +52,8 @@ public:
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr getJointTrajectoryPub();
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr getCameraStartAppPub();
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr getCameraExitAppPub();
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr getCameraVisionStartPub();
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr getCameraVisionStopPub();
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr getCollectorCmdPub();
 
     double getChassisMaxLinearSpeed() const;
@@ -134,6 +136,8 @@ private:
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr joint_trajectory_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr camera_start_app_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr camera_exit_app_pub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr camera_vision_start_pub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr camera_vision_stop_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr collector_cmd_pub_;
 
     rclcpp::Subscription<custom_interfaces::msg::ButtonIntent>::SharedPtr button_sub_;

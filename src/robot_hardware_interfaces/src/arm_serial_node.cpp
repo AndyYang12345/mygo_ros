@@ -115,7 +115,8 @@ public:
 private:
 	static constexpr int kArmServoCount = 5;
 	static constexpr int kGripperServoId = 5;
-    static constexpr int kTotalServoCount = 6;
+	static constexpr int kTotalServoCount = 6;
+	static constexpr size_t kDurationIndex = 6;
 
 	static double clamp(double value, double min_value, double max_value)
 	{
@@ -593,6 +594,18 @@ private:
 			return;
 		}
 
+		int duration_ms = direct_joint_time_ms_;
+		if (msg->data.size() > kDurationIndex) {
+			const double duration_value = msg->data[kDurationIndex];
+			if (!std::isfinite(duration_value)) {
+				RCLCPP_ERROR(this->get_logger(), "Direct PWM command contains non-finite duration");
+				return;
+			}
+			duration_ms = std::max(
+				min_segment_time_ms_,
+				static_cast<int>(std::lround(duration_value)));
+		}
+
 		std::array<int, kTotalServoCount> frame_pwms = {
 			last_arm_pwms_[0],
 			last_arm_pwms_[1],
@@ -629,7 +642,7 @@ private:
 			frame_pwms[static_cast<size_t>(kGripperServoId)] = last_gripper_pwm_;
 		}
 
-		const auto payload = formatArmFrame(frame_pwms, direct_joint_time_ms_);
+		const auto payload = formatArmFrame(frame_pwms, duration_ms);
 		RCLCPP_INFO(this->get_logger(), "Formatted direct pwm frame: %s", payload.c_str());
 		if (!sender_->send(payload)) {
 			RCLCPP_ERROR(this->get_logger(), "Failed to send direct pwm payload: %s", payload.c_str());

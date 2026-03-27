@@ -8,8 +8,6 @@
 namespace
 {
 constexpr double kPi = 3.14159265358979323846;
-constexpr const char *kVisionCameraAppId = "mygo_pipeline_uart";
-constexpr const char *kExitConfirmWord = "EXIT_NOW";
 constexpr std::array<double, 5> kVisionInitPwms = {
     1500.0, 1350.0, 2300.0, 1500.0, 1500.0};
 
@@ -37,7 +35,7 @@ uint8_t VisionTaskState::getSubState() const
 
 void VisionTaskState::onEnter(RobotStateMachineNode *context)
 {
-    context->setMenuItems({"B结束视觉程序并返回菜单"});
+    context->setMenuItems({"A开始识别", "B结束识别并返回菜单"});
     context->setMenuSelection(0);
 
     auto arm_target = custom_interfaces::msg::ArmJointTarget();
@@ -56,17 +54,20 @@ void VisionTaskState::onEnter(RobotStateMachineNode *context)
         arm_target.joints[3],
         arm_target.joints[4]);
 
-    auto camera_start = std_msgs::msg::String();
-    camera_start.data = std::string("id:") + kVisionCameraAppId;
-    context->getCameraStartAppPub()->publish(camera_start);
+    auto camera_stop = std_msgs::msg::String();
+    camera_stop.data = "stop";
+    context->getCameraVisionStopPub()->publish(camera_stop);
 
     RCLCPP_INFO(context->get_logger(), "Entered VISION_TASK state");
-    RCLCPP_INFO(context->get_logger(), "Requested camera app start: %s", kVisionCameraAppId);
+    RCLCPP_INFO(context->get_logger(), "Requested camera vision task reset to STOPPED");
 }
 
 void VisionTaskState::onExit(RobotStateMachineNode *context)
 {
     context->sendStopCommands();
+    auto camera_stop = std_msgs::msg::String();
+    camera_stop.data = "stop";
+    context->getCameraVisionStopPub()->publish(camera_stop);
 }
 
 void VisionTaskState::handleButton(
@@ -78,12 +79,21 @@ void VisionTaskState::handleButton(
         return;
     }
 
+    if (msg->button_id == 0)
+    {
+        auto camera_start = std_msgs::msg::String();
+        camera_start.data = "start";
+        context->getCameraVisionStartPub()->publish(camera_start);
+        RCLCPP_INFO(context->get_logger(), "Requested camera vision task START");
+        return;
+    }
+
     if (msg->button_id == 1)
     {
-        auto camera_exit = std_msgs::msg::String();
-        camera_exit.data = std::string("confirm:") + kExitConfirmWord + ",id:" + kVisionCameraAppId;
-        context->getCameraExitAppPub()->publish(camera_exit);
-        RCLCPP_INFO(context->get_logger(), "Requested camera app exit: %s", kVisionCameraAppId);
+        auto camera_stop = std_msgs::msg::String();
+        camera_stop.data = "stop";
+        context->getCameraVisionStopPub()->publish(camera_stop);
+        RCLCPP_INFO(context->get_logger(), "Requested camera vision task STOP");
 
         context->changeState(4);
     }

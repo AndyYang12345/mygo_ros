@@ -205,6 +205,16 @@ rclcpp::Publisher<std_msgs::msg::String>::SharedPtr RobotStateMachineNode::getCa
     return camera_exit_app_pub_;
 }
 
+rclcpp::Publisher<std_msgs::msg::String>::SharedPtr RobotStateMachineNode::getCameraVisionStartPub()
+{
+    return camera_vision_start_pub_;
+}
+
+rclcpp::Publisher<std_msgs::msg::String>::SharedPtr RobotStateMachineNode::getCameraVisionStopPub()
+{
+    return camera_vision_stop_pub_;
+}
+
 rclcpp::Publisher<std_msgs::msg::String>::SharedPtr RobotStateMachineNode::getCollectorCmdPub()
 {
     return collector_cmd_pub_;
@@ -323,6 +333,8 @@ void RobotStateMachineNode::setupPublishers()
         this->create_publisher<trajectory_msgs::msg::JointTrajectory>("/cmd/arm/joint_trajectory", 10);
     camera_start_app_pub_ = this->create_publisher<std_msgs::msg::String>("/cmd/camera/start_app", 10);
     camera_exit_app_pub_ = this->create_publisher<std_msgs::msg::String>("/cmd/camera/exit_app", 10);
+    camera_vision_start_pub_ = this->create_publisher<std_msgs::msg::String>("/cmd/camera/vision/start", 10);
+    camera_vision_stop_pub_ = this->create_publisher<std_msgs::msg::String>("/cmd/camera/vision/stop", 10);
     collector_cmd_pub_ = this->create_publisher<std_msgs::msg::String>("/cmd/collector/ball_submission", 10);
 }
 
