@@ -1223,6 +1223,7 @@ public:
   {
     const double max_linear_speed = declare_parameter<double>("chassis.max_linear_speed", 0.5);
     const double max_angular_speed = declare_parameter<double>("chassis.max_angular_speed", 1.0);
+    const auto status_qos = rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local();
     if (widget_) {
       widget_->setChassisSpeedLimits(max_linear_speed, max_angular_speed);
     }
@@ -1322,7 +1323,7 @@ public:
       });
 
     camera_connection_sub_ = create_subscription<std_msgs::msg::String>(
-      "/status/camera/connection", 10,
+      "/status/camera/connection", status_qos,
       [this](const std_msgs::msg::String::SharedPtr msg)
       {
         if (!msg || !widget_) {
@@ -1332,7 +1333,7 @@ public:
       });
 
     camera_app_state_sub_ = create_subscription<std_msgs::msg::String>(
-      "/status/camera/vision_app_state", 10,
+      "/status/camera/vision_app_state", status_qos,
       [this](const std_msgs::msg::String::SharedPtr msg)
       {
         if (!msg || !widget_) {
@@ -1342,7 +1343,7 @@ public:
       });
 
     camera_track_state_sub_ = create_subscription<std_msgs::msg::String>(
-      "/status/camera/vision_track_state", 10,
+      "/status/camera/vision_track_state", status_qos,
       [this](const std_msgs::msg::String::SharedPtr msg)
       {
         if (!msg || !widget_) {
@@ -1352,7 +1353,7 @@ public:
       });
 
     camera_protocol_sub_ = create_subscription<std_msgs::msg::String>(
-      "/status/camera/protocol", 10,
+      "/status/camera/protocol", status_qos,
       [this](const std_msgs::msg::String::SharedPtr msg)
       {
         if (!msg || !widget_) {

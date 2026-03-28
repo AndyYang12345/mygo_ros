@@ -71,10 +71,11 @@ public:
             std::vector<int64_t>{1500, 1350, 2300, 1500, 1500, 1500});
         load_default_pwms(default_pwms);
 
-        status_pub_ = this->create_publisher<std_msgs::msg::String>("/status/camera/protocol", 10);
-        connection_pub_ = this->create_publisher<std_msgs::msg::String>("/status/camera/connection", 10);
-        vision_app_state_pub_ = this->create_publisher<std_msgs::msg::String>("/status/camera/vision_app_state", 10);
-        vision_track_state_pub_ = this->create_publisher<std_msgs::msg::String>("/status/camera/vision_track_state", 10);
+        const auto status_qos = rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local();
+        status_pub_ = this->create_publisher<std_msgs::msg::String>("/status/camera/protocol", status_qos);
+        connection_pub_ = this->create_publisher<std_msgs::msg::String>("/status/camera/connection", status_qos);
+        vision_app_state_pub_ = this->create_publisher<std_msgs::msg::String>("/status/camera/vision_app_state", status_qos);
+        vision_track_state_pub_ = this->create_publisher<std_msgs::msg::String>("/status/camera/vision_track_state", status_qos);
         direct_pwm_pub_ = this->create_publisher<example_interfaces::msg::Float64MultiArray>(
             "/cmd/arm/direct_pwm_command",
             10);
@@ -216,6 +217,35 @@ private:
             parsed = parsed * 10 + (ch - '0');
         }
         value = parsed;
+        return true;
+    }
+
+    static bool parse_digits_until(
+        const std::string &text,
+        size_t start,
+        char delimiter,
+        int &value,
+        size_t &delimiter_pos)
+    {
+        if (start >= text.size()) {
+            return false;
+        }
+
+        int parsed = 0;
+        bool has_digit = false;
+        size_t cursor = start;
+        while (cursor < text.size() && std::isdigit(static_cast<unsigned char>(text[cursor]))) {
+            has_digit = true;
+            parsed = parsed * 10 + (text[cursor] - '0');
+            ++cursor;
+        }
+
+        if (!has_digit || cursor >= text.size() || text[cursor] != delimiter) {
+            return false;
+        }
+
+        value = parsed;
+        delimiter_pos = cursor;
         return true;
     }
 
@@ -843,20 +873,13 @@ private:
             if (pwm_mark >= frame.size() || frame[pwm_mark] != 'P') {
                 return std::nullopt;
             }
-            if (!parse_fixed_digits(frame, pwm_mark + 1, 4, pwm)) {
+            size_t duration_mark = 0;
+            if (!parse_digits_until(frame, pwm_mark + 1, 'T', pwm, duration_mark)) {
                 return std::nullopt;
             }
 
-            const size_t duration_mark = pwm_mark + 5;
-            if (duration_mark >= frame.size() || frame[duration_mark] != 'T') {
-                return std::nullopt;
-            }
-            if (!parse_fixed_digits(frame, duration_mark + 1, 4, duration_ms)) {
-                return std::nullopt;
-            }
-
-            const size_t end_mark = duration_mark + 5;
-            if (end_mark >= frame.size() || frame[end_mark] != '!') {
+            size_t end_mark = 0;
+            if (!parse_digits_until(frame, duration_mark + 1, '!', duration_ms, end_mark)) {
                 return std::nullopt;
             }
 

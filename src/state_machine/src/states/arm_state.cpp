@@ -583,7 +583,11 @@ bool ArmState::applyAxisControl(RobotStateMachineNode *context, double dt)
     const double ry_delta = speed[right_y_selected_servo_] * ry * dt;
     if (std::abs(ry_delta) >= min_step_pwm_)
     {
-        target_pwms_[right_y_selected_servo_] += ry_delta;
+        if (right_y_selected_servo_ == 2){
+            target_pwms_[right_y_selected_servo_] += ry_delta;
+        }else {
+            target_pwms_[right_y_selected_servo_] -= ry_delta;
+        }
     }
 
     bool changed = false;

@@ -53,7 +53,7 @@ public:
 			500.0,
 			2500.0)));
 		gripper_close_pwm_ = static_cast<int>(std::lround(clamp(
-			this->declare_parameter<double>("gripper_close_pwm", 2000.0),
+			this->declare_parameter<double>("gripper_close_pwm", 2050.0),
 			500.0,
 			2500.0)));
 		arm_joint_names_ = this->declare_parameter<std::vector<std::string>>(
