@@ -35,20 +35,24 @@ public:
 private:
   void updateSubmenuUi(RobotStateMachineNode * context);
   int angleToOctant(float x, float y) const;
+  int homePresetIndex() const;
   void publishJointCommand(RobotStateMachineNode * context);
   void publishDirectPwmCommand(RobotStateMachineNode * context);
   bool applyAxisControl(RobotStateMachineNode * context, double dt);
   void savePoseSnapshot(RobotStateMachineNode * context);
 
+  // 8-direction submenu slots; UI is expected to render these in octant order:
+  // 0 RIGHT, 1 UP_RIGHT, 2 UP, 3 UP_LEFT, 4 LEFT, 5 DOWN_LEFT, 6 DOWN, 7 DOWN_RIGHT.
+  // Use "-" as an explicit empty slot that should not trigger any motion.
   std::vector<std::string> presets_ = {
-    "pickup_right",
-    "pose_1",
-    "home",
-    "pose_2",
-    "pickup_left",
-    "box_left",
-    "normal_detection",
-    "box_right"
+    "Right Energy Unit",  // RIGHT
+    "-",                  // UP_RIGHT
+    "home",               // UP (top)
+    "-",                  // UP_LEFT
+    "Left Energy Unit",   // LEFT
+    "-",                  // DOWN_LEFT
+    "Side Energy Unit",   // DOWN
+    "-"                   // DOWN_RIGHT
   };
 
   bool submenu_active_ = false;

@@ -73,7 +73,8 @@ struct ModeMenuConfig
 };
 
 const std::array<ModeMenuConfig, 6> kModeMenuConfigs = {{
-  {"ARM", {"pickup_right", "pose_1", "home", "pose_2", "pickup_left", "box_left", "normal_detection", "box_right"}, true},
+  // Keep this in sync with ArmState's presets_ layout (8-direction submenu slots).
+  {"ARM", {"Right Energy Unit", "-", "home", "-", "Left Energy Unit", "-", "Side Energy Unit", "-"}, true},
   {"CHASSIS", {"Home", "NormalDetection", "CylinderSubmission", "CubeSubmission", "CylinderCollection", "CubeCollection", "UnderBridge", "BallSubmission"}, true},
   {"VISION_TASK", {"A_START", "B_CANCEL", "-", "-", "-", "-", "-", "-"}, false},
   {"POLE", {"EXIT_POLE_MODE", "-", "-", "-", "-", "-", "-", "-"}, false},

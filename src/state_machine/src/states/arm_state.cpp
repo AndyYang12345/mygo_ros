@@ -21,6 +21,8 @@ constexpr int kButtonLB = 4;
 constexpr int kButtonRB = 5;
 constexpr uint8_t kPressEvent = 0;
 constexpr uint8_t kReleaseEvent = 1;
+constexpr const char *kEmptyPresetSlot = "-";
+constexpr const char *kHomePresetName = "home";
 constexpr size_t kArmJointCount = 5;
 const char *kOctantNames[8] = {
     "RIGHT", "UP_RIGHT", "UP", "UP_LEFT", "LEFT", "DOWN_LEFT", "DOWN", "DOWN_RIGHT"};
@@ -79,7 +81,8 @@ uint8_t ArmState::getStateEnum() const
 void ArmState::onEnter(RobotStateMachineNode *context)
 {
     submenu_active_ = false;
-    submenu_selection_ = 0;
+    // Default selection to HOME to avoid accidental execution of the previous target.
+    submenu_selection_ = homePresetIndex();
     precision_mode_ = false;
     right_y_selected_servo_ = 2;
     dpad_switch_latched_ = false;
@@ -158,27 +161,42 @@ void ArmState::handleButton(
         if (msg->button_id == kButtonLB && msg->event_type == kReleaseEvent && submenu_active_)
         {
             submenu_active_ = false;
-            auto target = custom_interfaces::msg::ArmNamedTarget();
+            std::string chosen = kHomePresetName;
             if (submenu_selection_ >= 0 && submenu_selection_ < static_cast<int>(presets_.size()))
             {
-                target.target_name = presets_[submenu_selection_];
+                chosen = presets_[submenu_selection_];
+            }
+
+            // "-" is an explicit empty slot: do not publish any target.
+            if (!chosen.empty() && chosen != kEmptyPresetSlot)
+            {
+                auto target = custom_interfaces::msg::ArmNamedTarget();
+                target.target_name = chosen;
+                context->getArmNamedTargetPub()->publish(target);
+
+                target_joints_initialized_ = false;
+                waiting_initial_state_ = true;
+                preset_sync_pending_ = true;
+                preset_motion_in_progress_ = true;
+                preset_sync_due_time_ = context->now() + rclcpp::Duration::from_seconds(preset_sync_delay_s_);
+
+                RCLCPP_INFO(
+                    context->get_logger(),
+                    "ARM submenu selected index %d -> named target: %s",
+                    submenu_selection_,
+                    target.target_name.c_str());
             }
             else
             {
-                target.target_name = "home";
+                RCLCPP_INFO(
+                    context->get_logger(),
+                    "ARM submenu selected index %d is empty ('-'), skipped execution",
+                    submenu_selection_);
             }
-            context->getArmNamedTargetPub()->publish(target);
-            target_joints_initialized_ = false;
-            waiting_initial_state_ = true;
-            preset_sync_pending_ = true;
-            preset_motion_in_progress_ = true;
-            preset_sync_due_time_ = context->now() + rclcpp::Duration::from_seconds(preset_sync_delay_s_);
+
+            // Always reset selection back to HOME after closing submenu to avoid accidental re-trigger.
+            submenu_selection_ = homePresetIndex();
             updateSubmenuUi(context);
-            RCLCPP_INFO(
-                context->get_logger(),
-                "ARM submenu selected index %d -> named target: %s",
-                submenu_selection_,
-                target.target_name.c_str());
         }
         return;
     }
@@ -186,6 +204,8 @@ void ArmState::handleButton(
     if (msg->button_id == kButtonLB)
     {
         submenu_active_ = true;
+        // Highlight HOME when opening submenu; user can then deliberately choose another slot.
+        submenu_selection_ = homePresetIndex();
         updateSubmenuUi(context);
         return;
     }
@@ -421,6 +441,18 @@ uint8_t ArmState::getSubState() const
 std::vector<std::string> ArmState::getAvailableModes() const
 {
     return presets_;
+}
+
+int ArmState::homePresetIndex() const
+{
+    for (size_t i = 0; i < presets_.size(); ++i)
+    {
+        if (presets_[i] == kHomePresetName)
+        {
+            return static_cast<int>(i);
+        }
+    }
+    return 0;
 }
 
 void ArmState::updateSubmenuUi(RobotStateMachineNode *context)

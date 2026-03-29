@@ -28,25 +28,26 @@
         <joint name="joint4" value="0"/>
         <joint name="joint5" value="0"/>
     </group_state>
-    <group_state name="pose_1" group="arm">
-        <joint name="joint1" value="0.9199"/>
-        <joint name="joint2" value="-1.0804"/>
-        <joint name="joint3" value="1.2366"/>
-        <joint name="joint4" value="0.8461"/>
-        <joint name="joint5" value="-1.0544"/>
+    <group_state name="Right Energy Unit" group="arm">
+        <joint name="joint1" value="2.0193"/>
+        <joint name="joint2" value="-0.4547"/>
+        <joint name="joint3" value="0.8741"/>
+        <joint name="joint4" value="-2.1371"/>
+        <joint name="joint5" value="-0.516"/>
     </group_state>
-    <group_state name="pose_2" group="arm">
-        <joint name="joint1" value="2.0654"/>
-        <joint name="joint2" value="-1.1065"/>
-        <joint name="joint3" value="0.3254"/>
-        <joint name="joint4" value="1.0804"/>
-        <joint name="joint5" value="-0.6639"/>
+    <group_state name="Left Energy Unit" group="arm">
+        <joint name="joint1" value="-2.1418"/>
+        <joint name="joint2" value="-0.1861"/>
+        <joint name="joint3" value="0.7139"/>
+        <joint name="joint4" value="-2.2431"/>
+        <joint name="joint5" value="-0.2168"/>
     </group_state>
-    <group_state name="gripper_open" group="gripper">
-        <joint name="end_joint1" value="0.6769"/>
-    </group_state>
-    <group_state name="gripper_closed" group="gripper">
-        <joint name="end_joint1" value="-0.0868"/>
+    <group_state name="Side Energy Unit" group="arm">
+        <joint name="joint1" value="-1.4538"/>
+        <joint name="joint2" value="0.1037"/>
+        <joint name="joint3" value="1.3666"/>
+        <joint name="joint4" value="0"/>
+        <joint name="joint5" value="-0.2286"/>
     </group_state>
     <!--END EFFECTOR: Purpose: Represent information about an end effector.-->
     <end_effector name="gripper" parent_link="link5" group="gripper" parent_group="arm"/>
@@ -54,9 +55,6 @@
     <virtual_joint name="v_joint" type="fixed" parent_frame="world" child_link="base_link"/>
     <!--DISABLE COLLISIONS: By default it is assumed that any link of the robot could potentially come into collision with any other link in the robot. This tag disables collision checking between a specified pair of links. -->
     <disable_collisions link1="base_link" link2="link1" reason="Adjacent"/>
-    <disable_collisions link1="base_link" link2="link2" reason="Never"/>
-    <disable_collisions link1="base_link" link2="link3" reason="Never"/>
-    <disable_collisions link1="base_link" link2="link4" reason="Never"/>
     <disable_collisions link1="end_link1" link2="end_link2" reason="Default"/>
     <disable_collisions link1="end_link1" link2="link5" reason="Adjacent"/>
     <disable_collisions link1="end_link2" link2="link5" reason="Adjacent"/>
