@@ -1,0 +1,15 @@
+[Unit]
+Description=MyGo ROS2 Bringup Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=harekasa
+WorkingDirectory=/home/harekasa/mygo_ws
+ExecStart=/bin/bash /home/harekasa/mygo_ws/scripts/raspi/ros2_startup.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
