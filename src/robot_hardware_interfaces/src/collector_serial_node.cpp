@@ -1,6 +1,11 @@
+#include <algorithm>
+#include <array>
 #include <chrono>
+#include <cctype>
+#include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/string.hpp>
@@ -40,6 +45,15 @@ public:
                 cfg.baudrate);
         }
 
+        command_items_ = {
+            {"NEXT", &CollectorSerialNode::handleNextCommand},
+            {"UP", &CollectorSerialNode::handleDirectUpCommand},
+            {"OP", &CollectorSerialNode::handleDirectOpenCommand},
+            {"MD", &CollectorSerialNode::handleDirectMiddleCommand},
+            {"DN", &CollectorSerialNode::handleDirectDownCommand},
+            {"CL", &CollectorSerialNode::handleDirectCloseCommand},
+        };
+
         cmd_sub_ = this->create_subscription<std_msgs::msg::String>(
             "/cmd/collector/ball_submission",
             10,
@@ -49,6 +63,37 @@ public:
     }
 
 private:
+    using CommandHandler = bool (CollectorSerialNode::*)();
+
+    struct CommandItem
+    {
+        const char *label;
+        CommandHandler handler;
+    };
+
+    void cancelAutoCloseTimer()
+    {
+        if (auto_cl_timer_)
+        {
+            auto_cl_timer_->cancel();
+            auto_cl_timer_.reset();
+        }
+        waiting_auto_cl_ = false;
+    }
+
+    std::string normalizeCommand(std::string command) const
+    {
+        command.erase(
+            std::remove_if(command.begin(), command.end(), [](unsigned char c) { return std::isspace(c) != 0; }),
+            command.end());
+        std::transform(
+            command.begin(),
+            command.end(),
+            command.begin(),
+            [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+        return command;
+    }
+
     bool sendCommand(const std::string &cmd)
     {
         if (!sender_ || !sender_->is_ready())
@@ -83,10 +128,29 @@ private:
             return;
         }
 
+        const auto command = normalizeCommand(msg->data);
+        for (const auto &item : command_items_)
+        {
+            if (command == item.label)
+            {
+                const bool handled = (this->*item.handler)();
+                if (!handled)
+                {
+                    RCLCPP_WARN(this->get_logger(), "Collector command %s was not executed", command.c_str());
+                }
+                return;
+            }
+        }
+
+        RCLCPP_WARN(this->get_logger(), "Unsupported collector command: %s", msg->data.c_str());
+    }
+
+    bool handleNextCommand()
+    {
         if (waiting_auto_cl_)
         {
             RCLCPP_WARN(this->get_logger(), "OP->CL auto sequence running, ignore extra trigger");
-            return;
+            return false;
         }
 
         if (trigger_step_ == 0)
@@ -94,22 +158,23 @@ private:
             if (sendCommand("UP"))
             {
                 trigger_step_ = 1;
+                return true;
             }
-            return;
+            return false;
         }
 
         if (trigger_step_ == 1)
         {
             if (!sendCommand("OP"))
             {
-                return;
+                return false;
             }
             waiting_auto_cl_ = true;
             auto_cl_timer_ = this->create_wall_timer(
                 std::chrono::milliseconds(op_cl_interval_ms_),
                 std::bind(&CollectorSerialNode::autoCloseCallback, this));
             trigger_step_ = 2;
-            return;
+            return true;
         }
 
         if (trigger_step_ == 2)
@@ -117,8 +182,46 @@ private:
             if (sendCommand("DN"))
             {
                 trigger_step_ = 0;
+                return true;
             }
         }
+
+        return false;
+    }
+
+    bool handleDirectUpCommand()
+    {
+        cancelAutoCloseTimer();
+        trigger_step_ = 0;
+        return sendCommand("UP");
+    }
+
+    bool handleDirectOpenCommand()
+    {
+        cancelAutoCloseTimer();
+        trigger_step_ = 0;
+        return sendCommand("OP");
+    }
+
+    bool handleDirectMiddleCommand()
+    {
+        cancelAutoCloseTimer();
+        trigger_step_ = 0;
+        return sendCommand("MD");
+    }
+
+    bool handleDirectDownCommand()
+    {
+        cancelAutoCloseTimer();
+        trigger_step_ = 0;
+        return sendCommand("DN");
+    }
+
+    bool handleDirectCloseCommand()
+    {
+        cancelAutoCloseTimer();
+        trigger_step_ = 0;
+        return sendCommand("CL");
     }
 
     void autoCloseCallback()
@@ -126,6 +229,7 @@ private:
         if (auto_cl_timer_)
         {
             auto_cl_timer_->cancel();
+            auto_cl_timer_.reset();
         }
         if (!waiting_auto_cl_)
         {
@@ -142,6 +246,7 @@ private:
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr cmd_sub_;
     rclcpp::TimerBase::SharedPtr auto_cl_timer_;
     std::unique_ptr<SendCommand> sender_;
+    std::vector<CommandItem> command_items_;
 
     int op_cl_interval_ms_ = 1000;
     int trigger_step_ = 0;

@@ -1,6 +1,9 @@
 #include "state_machine/chassis_state.hpp"
 #include "state_machine/robot_state_machine_node.hpp"
-// @todo #include "custom_interfaces/msg/arm_command.hpp"  // 假设你需要自定义的机械臂命令
+
+#include <algorithm>
+#include "custom_interfaces/msg/arm_named_target.hpp"
+#include "std_msgs/msg/string.hpp"
 
 namespace {
 constexpr bool kChassisDebugEnabled = true;
@@ -12,68 +15,28 @@ constexpr float kPi = 3.14159265358979323846F;
 void ChassisState::initHandlerTables()
 {
     // Home模式
-    handler_tables_[0] = {
-        .joystick = &ChassisState::handleHomeJoystick,
-        .button = &ChassisState::handleHomeButton,
-        .trigger = &ChassisState::handleHomeTrigger,
-        .update = &ChassisState::updateHome
-    };
+    handler_tables_[0] = {&ChassisState::handleHomeJoystick, &ChassisState::handleHomeButton, &ChassisState::handleHomeTrigger, &ChassisState::updateHome};
     
     // NormalDetection模式
-    handler_tables_[1] = {
-        .joystick = &ChassisState::handleNormalDetectionJoystick,
-        .button = &ChassisState::handleNormalDetectionButton,
-        .trigger = &ChassisState::handleNormalDetectionTrigger,
-        .update = &ChassisState::updateNormalDetection
-    };
+    handler_tables_[1] = {&ChassisState::handleNormalDetectionJoystick, &ChassisState::handleNormalDetectionButton, &ChassisState::handleNormalDetectionTrigger, &ChassisState::updateNormalDetection};
     
     // CylinderSubmission模式
-    handler_tables_[2] = {
-        .joystick = &ChassisState::handleCylinderSubmissionJoystick,
-        .button = &ChassisState::handleCylinderSubmissionButton,
-        .trigger = &ChassisState::handleCylinderSubmissionTrigger,
-        .update = &ChassisState::updateCylinderSubmission
-    };
+    handler_tables_[2] = {&ChassisState::handleCylinderSubmissionJoystick, &ChassisState::handleCylinderSubmissionButton, &ChassisState::handleCylinderSubmissionTrigger, &ChassisState::updateCylinderSubmission};
     
     // CubeSubmission模式
-    handler_tables_[3] = {
-        .joystick = &ChassisState::handleCubeSubmissionJoystick,
-        .button = &ChassisState::handleCubeSubmissionButton,
-        .trigger = &ChassisState::handleCubeSubmissionTrigger,
-        .update = &ChassisState::updateCubeSubmission
-    };
+    handler_tables_[3] = {&ChassisState::handleCubeSubmissionJoystick, &ChassisState::handleCubeSubmissionButton, &ChassisState::handleCubeSubmissionTrigger, &ChassisState::updateCubeSubmission};
     
     // CylinderCollection模式
-    handler_tables_[4] = {
-        .joystick = &ChassisState::handleCylinderCollectionJoystick,
-        .button = &ChassisState::handleCylinderCollectionButton,
-        .trigger = &ChassisState::handleCylinderCollectionTrigger,
-        .update = &ChassisState::updateCylinderCollection
-    };
+    handler_tables_[4] = {&ChassisState::handleCylinderCollectionJoystick, &ChassisState::handleCylinderCollectionButton, &ChassisState::handleCylinderCollectionTrigger, &ChassisState::updateCylinderCollection};
     
     // CubeCollection模式
-    handler_tables_[5] = {
-        .joystick = &ChassisState::handleCubeCollectionJoystick,
-        .button = &ChassisState::handleCubeCollectionButton,
-        .trigger = &ChassisState::handleCubeCollectionTrigger,
-        .update = &ChassisState::updateCubeCollection
-    };
+    handler_tables_[5] = {&ChassisState::handleCubeCollectionJoystick, &ChassisState::handleCubeCollectionButton, &ChassisState::handleCubeCollectionTrigger, &ChassisState::updateCubeCollection};
     
     // UnderBridge模式
-    handler_tables_[6] = {
-        .joystick = &ChassisState::handleUnderBridgeJoystick,
-        .button = &ChassisState::handleUnderBridgeButton,
-        .trigger = &ChassisState::handleUnderBridgeTrigger,
-        .update = &ChassisState::updateUnderBridge
-    };
+    handler_tables_[6] = {&ChassisState::handleUnderBridgeJoystick, &ChassisState::handleUnderBridgeButton, &ChassisState::handleUnderBridgeTrigger, &ChassisState::updateUnderBridge};
 
     // BallSubmission模式
-    handler_tables_[7] = {
-        .joystick = &ChassisState::handleBallSubmissionJoystick,
-        .button = &ChassisState::handleBallSubmissionButton,
-        .trigger = &ChassisState::handleBallSubmissionTrigger,
-        .update = &ChassisState::updateBallSubmission
-    };
+    handler_tables_[7] = {&ChassisState::handleBallSubmissionJoystick, &ChassisState::handleBallSubmissionButton, &ChassisState::handleBallSubmissionTrigger, &ChassisState::updateBallSubmission};
 }
 
 // ==================== 构造函数 ====================
@@ -81,15 +44,15 @@ void ChassisState::initHandlerTables()
 ChassisState::ChassisState()
 {
     initHandlerTables();
-    submenu_modes_ = {
-        ArmMode::Home,
-        ArmMode::NormalDetection,
-        ArmMode::CylinderSubmission,
-        ArmMode::CubeSubmission,
-        ArmMode::CylinderCollection,
-        ArmMode::CubeCollection,
-        ArmMode::UnderBridge,
-        ArmMode::BallSubmission,
+    submenu_items_ = {
+        {"MD", &ChassisState::publishCollectorMiddleCommand},
+        {"DN", &ChassisState::publishCollectorDownCommand},
+        {"UP", &ChassisState::publishCollectorUpCommand},
+        {"OP", &ChassisState::publishCollectorOpenCommand},
+        {"CL", &ChassisState::publishCollectorCloseCommand},
+        {"HOME", &ChassisState::publishArmHomeCommand},
+        {"-", &ChassisState::publishNoOpCommand},
+        {"-", &ChassisState::publishNoOpCommand},
     };
 }
 
@@ -107,16 +70,16 @@ uint8_t ChassisState::getStateEnum() const
 
 uint8_t ChassisState::getSubState() const
 {
-    return static_cast<uint8_t>(arm_mode_);
+    return static_cast<uint8_t>(submenu_selection_);
 }
 
 std::vector<std::string> ChassisState::getAvailableModes() const
 {
     std::vector<std::string> modes;
-    modes.reserve(submenu_modes_.size());
-    for (const auto mode : submenu_modes_)
+    modes.reserve(submenu_items_.size());
+    for (const auto &item : submenu_items_)
     {
-        modes.push_back(armModeName(mode));
+        modes.push_back(item.label);
     }
     return modes;
 }
@@ -127,7 +90,6 @@ void ChassisState::onEnter(RobotStateMachineNode *context)
     speed_multiplier_ = 1.0;
     arm_mode_ = ArmMode::Home;  // 默认进入Home模式
     submenu_active_ = false;
-    submenu_latched_ = false;
     submenu_selection_ = 0;
     updateSubmenuUi(context);
     onArmModeEnter(context, arm_mode_);
@@ -158,8 +120,8 @@ void ChassisState::handleJoystick(
         {
             RCLCPP_INFO_THROTTLE(
                 context->get_logger(), *context->get_clock(), 200,
-                "[CHASSIS_SUBMENU] joystick centered (x=%.2f, y=%.2f), keep index=%d, mode=%s",
-                x, y, submenu_selection_, armModeName(submenu_modes_[submenu_selection_]).c_str());
+                "[CHASSIS_SUBMENU] joystick centered (x=%.2f, y=%.2f), keep index=%d, item=%s",
+                x, y, submenu_selection_, submenu_items_[static_cast<size_t>(submenu_selection_)].label);
             return;
         }
 
@@ -170,19 +132,19 @@ void ChassisState::handleJoystick(
             updateSubmenuUi(context);
             RCLCPP_INFO(
                 context->get_logger(),
-                "[CHASSIS_SUBMENU] octant=%d -> index=%d, mode=%s",
+                "[CHASSIS_SUBMENU] octant=%d -> index=%d, item=%s",
                 octant,
                 submenu_selection_,
-                armModeName(submenu_modes_[submenu_selection_]).c_str());
+                submenu_items_[static_cast<size_t>(submenu_selection_)].label);
         }
         else
         {
             RCLCPP_INFO_THROTTLE(
                 context->get_logger(), *context->get_clock(), 150,
-                "[CHASSIS_SUBMENU] octant=%d, index=%d, mode=%s",
+                "[CHASSIS_SUBMENU] octant=%d, index=%d, item=%s",
                 octant,
                 submenu_selection_,
-                armModeName(submenu_modes_[submenu_selection_]).c_str());
+                submenu_items_[static_cast<size_t>(submenu_selection_)].label);
         }
         return;
     }
@@ -201,15 +163,7 @@ void ChassisState::handleButton(
         if (msg->event_type == 0)
         {
             submenu_active_ = true;
-            submenu_latched_ = false;
-            for (size_t i = 0; i < submenu_modes_.size(); ++i)
-            {
-                if (submenu_modes_[i] == arm_mode_)
-                {
-                    submenu_selection_ = static_cast<int>(i);
-                    break;
-                }
-            }
+            submenu_selection_ = 0;
             updateSubmenuUi(context);
             return;
         }
@@ -217,8 +171,9 @@ void ChassisState::handleButton(
         if (msg->event_type == 1 && submenu_active_)
         {
             submenu_active_ = false;
-            submenu_latched_ = false;
-            setArmMode(context, submenu_modes_[submenu_selection_]);
+            const auto index = static_cast<size_t>(std::clamp(submenu_selection_, 0, static_cast<int>(submenu_items_.size() - 1)));
+            auto handler = submenu_items_[index].handler;
+            (this->*handler)(context);
             updateSubmenuUi(context);
             return;
         }
@@ -229,7 +184,6 @@ void ChassisState::handleButton(
         if (msg->button_id == 1 && msg->event_type == 0)
         {
             submenu_active_ = false;
-            submenu_latched_ = false;
             updateSubmenuUi(context);
         }
         return;
@@ -272,6 +226,52 @@ void ChassisState::publishChassisCommand(
     twist.linear.x = y * context->getChassisMaxLinearSpeed() * speed_multiplier;
     twist.angular.z = x * context->getChassisMaxAngularSpeed() * speed_multiplier;
     context->getChassisCmdPub()->publish(twist);
+}
+
+void ChassisState::publishCollectorCommand(RobotStateMachineNode *context, const std::string &command)
+{
+    auto msg = std_msgs::msg::String();
+    msg.data = command;
+    context->getCollectorCmdPub()->publish(msg);
+    RCLCPP_INFO(context->get_logger(), "CHASSIS submenu -> collector command: %s", command.c_str());
+}
+
+void ChassisState::publishArmHomeCommand(RobotStateMachineNode *context)
+{
+    auto target = custom_interfaces::msg::ArmNamedTarget();
+    target.target_name = "home";
+    context->getArmNamedTargetPub()->publish(target);
+    RCLCPP_INFO(context->get_logger(), "CHASSIS submenu -> arm named target: home");
+}
+
+void ChassisState::publishCollectorMiddleCommand(RobotStateMachineNode *context)
+{
+    publishCollectorCommand(context, "MD");
+}
+
+void ChassisState::publishCollectorDownCommand(RobotStateMachineNode *context)
+{
+    publishCollectorCommand(context, "DN");
+}
+
+void ChassisState::publishCollectorUpCommand(RobotStateMachineNode *context)
+{
+    publishCollectorCommand(context, "UP");
+}
+
+void ChassisState::publishCollectorOpenCommand(RobotStateMachineNode *context)
+{
+    publishCollectorCommand(context, "OP");
+}
+
+void ChassisState::publishCollectorCloseCommand(RobotStateMachineNode *context)
+{
+    publishCollectorCommand(context, "CL");
+}
+
+void ChassisState::publishNoOpCommand(RobotStateMachineNode *context)
+{
+    RCLCPP_INFO(context->get_logger(), "CHASSIS submenu -> no-op item selected");
 }
 
 // ==================== Home模式实现 ====================
@@ -834,10 +834,10 @@ std::string ChassisState::armModeName(ArmMode mode) const
 void ChassisState::updateSubmenuUi(RobotStateMachineNode *context)
 {
     std::vector<std::string> names;
-    names.reserve(submenu_modes_.size());
-    for (const auto mode : submenu_modes_)
+    names.reserve(submenu_items_.size());
+    for (const auto &item : submenu_items_)
     {
-        names.push_back(armModeName(mode));
+        names.push_back(item.label);
     }
 
     context->setMenuItems(names);
@@ -848,9 +848,9 @@ void ChassisState::updateSubmenuUi(RobotStateMachineNode *context)
         return;
     }
 
-    for (size_t i = 0; i < submenu_modes_.size(); ++i)
+    for (size_t i = 0; i < submenu_items_.size(); ++i)
     {
-        if (submenu_modes_[i] == arm_mode_)
+        if (static_cast<int>(i) == submenu_selection_)
         {
             context->setMenuSelection(static_cast<int>(i));
             return;

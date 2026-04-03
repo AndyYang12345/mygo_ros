@@ -49,7 +49,7 @@ public:
 
 private:
     // ==================== 机械臂模式枚举 ====================
-     ArmMode arm_mode_ = ArmMode::Home;
+    ArmMode arm_mode_ = ArmMode::Home;
 
     // ==================== 函数指针类型定义 ====================
     using JoystickHandler = void (ChassisState::*)(
@@ -72,8 +72,6 @@ private:
         ButtonHandler button;
         TriggerHandler trigger;
         UpdateHandler update;
-        void (ChassisState::*onEnter)(RobotStateMachineNode *context);
-        void (ChassisState::*onExit)(RobotStateMachineNode *context);
     };
 
     // 初始化函数指针表
@@ -83,10 +81,16 @@ private:
     static constexpr size_t ARM_MODE_COUNT = 8;
     std::array<HandlerTable, ARM_MODE_COUNT> handler_tables_;
 
+    using CommandHandler = void (ChassisState::*)(RobotStateMachineNode *context);
+
+    struct CommandItem {
+        const char *label;
+        CommandHandler handler;
+    };
+
     bool submenu_active_ = false;
-    bool submenu_latched_ = false;
     int submenu_selection_ = 0;
-    std::vector<ArmMode> submenu_modes_;
+    std::vector<CommandItem> submenu_items_;
 
     // ==================== 各模式的实现函数声明 ====================
     
@@ -152,6 +156,14 @@ private:
     // 辅助函数
     double applyDeadzone(double value, double deadzone) const;
     void publishChassisCommand(RobotStateMachineNode *context, double x, double y, double speed_multiplier = 1.0);
+    void publishCollectorCommand(RobotStateMachineNode *context, const std::string &command);
+    void publishArmHomeCommand(RobotStateMachineNode *context);
+    void publishCollectorMiddleCommand(RobotStateMachineNode *context);
+    void publishCollectorDownCommand(RobotStateMachineNode *context);
+    void publishCollectorUpCommand(RobotStateMachineNode *context);
+    void publishCollectorOpenCommand(RobotStateMachineNode *context);
+    void publishCollectorCloseCommand(RobotStateMachineNode *context);
+    void publishNoOpCommand(RobotStateMachineNode *context);
     
     double speed_multiplier_ = 1.0;
     

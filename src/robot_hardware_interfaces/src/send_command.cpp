@@ -11,13 +11,12 @@ struct ModeDefault {
     int baudrate;
 };
 
-constexpr std::array<ModeDefault, 6> kModeDefaults = {{
-    {"CHASSIS", "/dev/ttyACM0", 115200},
-    {"ARM", "/dev/ttyACM0", 115200},
-    {"CAMERA", "/dev/ttyACM2", 115200},
-    {"GRIPPER", "/dev/ttyACM0", 115200},
-    {"POLE", "/dev/ttyACM0", 115200},
-    {"COLLECTOR", "/dev/ttyACM4", 115200},
+constexpr std::array<ModeDefault, 5> kModeDefaults = {{
+    {"CHASSIS", "/dev/chassis", 115200},
+    {"ARM", "/dev/arm", 115200},
+    {"GRIPPER", "/dev/arm", 115200},
+    {"POLE", "/dev/arm", 115200},
+    {"COLLECTOR", "/dev/collector", 115200},
 }};
 }
 
