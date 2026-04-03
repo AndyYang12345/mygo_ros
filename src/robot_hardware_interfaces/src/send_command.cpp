@@ -15,7 +15,7 @@ constexpr std::array<ModeDefault, 5> kModeDefaults = {{
     {"CHASSIS", "/dev/chassis", 115200},
     {"ARM", "/dev/arm", 115200},
     {"GRIPPER", "/dev/arm", 115200},
-    {"POLE", "/dev/arm", 115200},
+    {"POLE", "/dev/collector", 115200},
     {"COLLECTOR", "/dev/collector", 115200},
 }};
 }
