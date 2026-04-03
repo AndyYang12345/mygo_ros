@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 User=harekasa
 WorkingDirectory=/home/harekasa/mygo_ws
-ExecStart=/bin/bash /home/harekasa/mygo_ws/scripts/raspi/ros2_startup.sh
+ExecStart=/bin/zsh /home/harekasa/mygo_ws/scripts/raspi/ros2_startup.sh
 Restart=on-failure
 RestartSec=5
 
