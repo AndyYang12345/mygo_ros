@@ -91,6 +91,8 @@ void ArmState::onEnter(RobotStateMachineNode *context)
     waiting_initial_state_ = true;
     preset_sync_pending_ = false;
     preset_motion_in_progress_ = false;
+    preset_feedback_gate_ = false;
+    preset_feedback_query_sent_ = false;
     kg_sync_requested_ = false;
     latest_feedback_valid_ = false;
     updateSubmenuUi(context);
@@ -102,6 +104,11 @@ void ArmState::onEnter(RobotStateMachineNode *context)
             [this, context](const example_interfaces::msg::Float64MultiArray::SharedPtr msg)
             {
                 if (!msg || msg->data.size() < 5)
+                {
+                    return;
+                }
+
+                if (preset_feedback_gate_ && !preset_feedback_query_sent_)
                 {
                     return;
                 }
@@ -129,6 +136,12 @@ void ArmState::onEnter(RobotStateMachineNode *context)
                 if (kg_sync_requested_)
                 {
                     kg_sync_requested_ = false;
+                }
+
+                if (preset_feedback_gate_)
+                {
+                    preset_feedback_gate_ = false;
+                    preset_feedback_query_sent_ = false;
                 }
             });
     }
@@ -178,6 +191,8 @@ void ArmState::handleButton(
                 waiting_initial_state_ = true;
                 preset_sync_pending_ = true;
                 preset_motion_in_progress_ = true;
+                preset_feedback_gate_ = true;
+                preset_feedback_query_sent_ = false;
                 preset_sync_due_time_ = context->now() + rclcpp::Duration::from_seconds(preset_sync_delay_s_);
 
                 RCLCPP_INFO(
@@ -381,6 +396,7 @@ void ArmState::update(RobotStateMachineNode *context)
             query_msg.data = "kg";
             context->getArmQueryCurrentPub()->publish(query_msg);
             last_query_time_ = now;
+            preset_feedback_query_sent_ = true;
             preset_sync_pending_ = false;
             return;
         }
@@ -412,6 +428,7 @@ void ArmState::update(RobotStateMachineNode *context)
         query_msg.data = "kg";
         context->getArmQueryCurrentPub()->publish(query_msg);
         last_query_time_ = now;
+        preset_feedback_query_sent_ = true;
         kg_sync_requested_ = true;
         next_sync_query_time_ = now + rclcpp::Duration::from_seconds(kg_sync_interval_s_);
     }

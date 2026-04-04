@@ -70,6 +70,8 @@ private:
   bool waiting_initial_state_ = true;
   bool preset_sync_pending_ = false;
   bool preset_motion_in_progress_ = false;
+  bool preset_feedback_gate_ = false;
+  bool preset_feedback_query_sent_ = false;
   bool kg_sync_requested_ = false;
   bool latest_feedback_valid_ = false;
 
