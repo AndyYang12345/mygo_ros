@@ -158,6 +158,8 @@ private:
     void publishChassisCommand(RobotStateMachineNode *context, double x, double y, double speed_multiplier = 1.0);
     void publishCollectorCommand(RobotStateMachineNode *context, const std::string &command);
     void publishArmHomeCommand(RobotStateMachineNode *context);
+    void publishArmUnderBridgeCommand(RobotStateMachineNode *context);
+    void publishArmFoldedCommand(RobotStateMachineNode *context);
     void publishCollectorMiddleCommand(RobotStateMachineNode *context);
     void publishCollectorDownCommand(RobotStateMachineNode *context);
     void publishCollectorUpCommand(RobotStateMachineNode *context);

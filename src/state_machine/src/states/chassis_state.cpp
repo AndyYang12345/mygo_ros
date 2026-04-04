@@ -46,12 +46,12 @@ ChassisState::ChassisState()
     initHandlerTables();
     submenu_items_ = {
         {"MD", &ChassisState::publishCollectorMiddleCommand},
-        {"DN", &ChassisState::publishCollectorDownCommand},
-        {"UP", &ChassisState::publishCollectorUpCommand},
-        {"OP", &ChassisState::publishCollectorOpenCommand},
-        {"CL", &ChassisState::publishCollectorCloseCommand},
-        {"HOME", &ChassisState::publishArmHomeCommand},
         {"-", &ChassisState::publishNoOpCommand},
+        {"DN", &ChassisState::publishCollectorDownCommand},
+        {"-", &ChassisState::publishNoOpCommand},
+        {"under_bridge", &ChassisState::publishArmUnderBridgeCommand},
+        {"-", &ChassisState::publishNoOpCommand},
+        {"folded", &ChassisState::publishArmFoldedCommand},
         {"-", &ChassisState::publishNoOpCommand},
     };
 }
@@ -242,6 +242,22 @@ void ChassisState::publishArmHomeCommand(RobotStateMachineNode *context)
     target.target_name = "home";
     context->getArmNamedTargetPub()->publish(target);
     RCLCPP_INFO(context->get_logger(), "CHASSIS submenu -> arm named target: home");
+}
+
+void ChassisState::publishArmUnderBridgeCommand(RobotStateMachineNode *context)
+{
+    auto target = custom_interfaces::msg::ArmNamedTarget();
+    target.target_name = "under_bridge";
+    context->getArmNamedTargetPub()->publish(target);
+    RCLCPP_INFO(context->get_logger(), "CHASSIS submenu -> arm named target: under_bridge");
+}
+
+void ChassisState::publishArmFoldedCommand(RobotStateMachineNode *context)
+{
+    auto target = custom_interfaces::msg::ArmNamedTarget();
+    target.target_name = "folded";
+    context->getArmNamedTargetPub()->publish(target);
+    RCLCPP_INFO(context->get_logger(), "CHASSIS submenu -> arm named target: folded");
 }
 
 void ChassisState::publishCollectorMiddleCommand(RobotStateMachineNode *context)

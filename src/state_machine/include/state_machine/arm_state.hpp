@@ -46,9 +46,9 @@ private:
   // Use "-" as an explicit empty slot that should not trigger any motion.
   std::vector<std::string> presets_ = {
     "Right Energy Unit",  // RIGHT
-    "-",                  // UP_RIGHT
+    "under_bridge",       // UP_RIGHT
     "home",               // UP (top)
-    "-",                  // UP_LEFT
+    "folded",             // UP_LEFT
     "Left Energy Unit",   // LEFT
     "-",                  // DOWN_LEFT
     "Side Energy Unit",   // DOWN
