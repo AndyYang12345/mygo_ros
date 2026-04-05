@@ -9,6 +9,7 @@
 #include <tf2/LinearMath/Quaternion.h>
 
 #include <chrono>
+#include <array>
 #include <thread>
 #include <unordered_map>
 
@@ -67,7 +68,9 @@ public:
     }
 
     void goToNamedTarget(const std::string &target_name) {
-        arm_->setStartStateToCurrentState();
+        if (!applyHardwareStartStateToMoveIt()) {
+            arm_->setStartStateToCurrentState();
+        }
         arm_->setNamedTarget(target_name);
         planAndExecute(arm_);
         last_named_target_ = target_name;
@@ -147,6 +150,31 @@ public:
     }
 
 private:
+    bool applyHardwareStartStateToMoveIt() {
+        if (!latest_current_joint_valid_) {
+            RCLCPP_WARN(node_->get_logger(), "No hardware joint snapshot yet, fallback to MoveIt current state.");
+            return false;
+        }
+
+        auto start_state = arm_->getCurrentState(1.0);
+        if (!start_state) {
+            RCLCPP_WARN(node_->get_logger(), "Failed to get MoveIt current state, fallback to default start state.");
+            return false;
+        }
+
+        const auto *joint_model_group = start_state->getJointModelGroup("arm");
+        if (!joint_model_group) {
+            RCLCPP_WARN(node_->get_logger(), "MoveIt joint group 'arm' not found, cannot apply hardware start state.");
+            return false;
+        }
+
+        std::vector<double> joints(latest_current_joints_.begin(), latest_current_joints_.end());
+        start_state->setJointGroupPositions(joint_model_group, joints);
+        start_state->update();
+        arm_->setStartState(*start_state);
+        return true;
+    }
+
     bool publishArmTrajectory(const trajectory_msgs::msg::JointTrajectory &trajectory) {
         if (trajectory.points.empty()) {
             RCLCPP_ERROR(node_->get_logger(), "Planned arm trajectory has no points.");
@@ -251,12 +279,21 @@ private:
     }
 
     void currentJointRadCallback(const Float64MultiArray::SharedPtr msg) {
-        if (!msg || !joint_command_visual_only_) {
+        if (!msg) {
             return;
         }
 
         const auto &joints = msg->data;
         if (joints.size() != 5) {
+            return;
+        }
+
+        for (size_t i = 0; i < latest_current_joints_.size(); ++i) {
+            latest_current_joints_[i] = joints[i];
+        }
+        latest_current_joint_valid_ = true;
+
+        if (!joint_command_visual_only_) {
             return;
         }
 
@@ -293,6 +330,8 @@ private:
     rclcpp::Subscription<ArmPoseTarget>::SharedPtr pose_cmd_sub_;
     rclcpp::Publisher<ArmJointTarget>::SharedPtr arm_joint_target_pub_;
     bool joint_command_visual_only_ = true;
+    std::array<double, 5> latest_current_joints_ = {0.0, 0.0, 0.0, 0.0, 0.0};
+    bool latest_current_joint_valid_ = false;
 
     std::string last_named_target_ = "home";
 };

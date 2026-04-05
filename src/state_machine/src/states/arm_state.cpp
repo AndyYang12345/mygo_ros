@@ -93,6 +93,9 @@ void ArmState::onEnter(RobotStateMachineNode *context)
     preset_motion_in_progress_ = false;
     preset_feedback_gate_ = false;
     preset_feedback_query_sent_ = false;
+    preset_pre_sync_pending_ = false;
+    skip_direct_target_refresh_once_ = false;
+    pending_named_target_.clear();
     kg_sync_requested_ = false;
     latest_feedback_valid_ = false;
     updateSubmenuUi(context);
@@ -120,7 +123,8 @@ void ArmState::onEnter(RobotStateMachineNode *context)
                 latest_feedback_valid_ = true;
 
                 const bool should_update_direct_target =
-                    (!target_joints_initialized_) || waiting_initial_state_ || preset_sync_pending_;
+                    ((!target_joints_initialized_) || waiting_initial_state_ || preset_sync_pending_) &&
+                    !skip_direct_target_refresh_once_;
 
                 if (should_update_direct_target)
                 {
@@ -142,6 +146,33 @@ void ArmState::onEnter(RobotStateMachineNode *context)
                 {
                     preset_feedback_gate_ = false;
                     preset_feedback_query_sent_ = false;
+                }
+
+                if (skip_direct_target_refresh_once_)
+                {
+                    skip_direct_target_refresh_once_ = false;
+                }
+
+                if (preset_pre_sync_pending_ && !pending_named_target_.empty())
+                {
+                    auto target = custom_interfaces::msg::ArmNamedTarget();
+                    target.target_name = pending_named_target_;
+                    context->getArmNamedTargetPub()->publish(target);
+
+                    preset_pre_sync_pending_ = false;
+                    pending_named_target_.clear();
+                    target_joints_initialized_ = false;
+                    waiting_initial_state_ = true;
+                    preset_sync_pending_ = true;
+                    preset_motion_in_progress_ = true;
+                    preset_feedback_gate_ = true;
+                    preset_feedback_query_sent_ = false;
+                    preset_sync_due_time_ = context->now() + rclcpp::Duration::from_seconds(preset_sync_delay_s_);
+
+                    RCLCPP_INFO(
+                        context->get_logger(),
+                        "ARM preset pre-sync done, execute named target: %s",
+                        target.target_name.c_str());
                 }
             });
     }
@@ -183,23 +214,26 @@ void ArmState::handleButton(
             // "-" is an explicit empty slot: do not publish any target.
             if (!chosen.empty() && chosen != kEmptyPresetSlot)
             {
-                auto target = custom_interfaces::msg::ArmNamedTarget();
-                target.target_name = chosen;
-                context->getArmNamedTargetPub()->publish(target);
-
                 target_joints_initialized_ = false;
                 waiting_initial_state_ = true;
-                preset_sync_pending_ = true;
-                preset_motion_in_progress_ = true;
+                preset_sync_pending_ = false;
+                preset_motion_in_progress_ = false;
                 preset_feedback_gate_ = true;
-                preset_feedback_query_sent_ = false;
-                preset_sync_due_time_ = context->now() + rclcpp::Duration::from_seconds(preset_sync_delay_s_);
+                preset_feedback_query_sent_ = true;
+                preset_pre_sync_pending_ = true;
+                skip_direct_target_refresh_once_ = true;
+                pending_named_target_ = chosen;
+
+                auto query_msg = std_msgs::msg::String();
+                query_msg.data = "kg";
+                context->getArmQueryCurrentPub()->publish(query_msg);
+                last_query_time_ = context->now();
 
                 RCLCPP_INFO(
                     context->get_logger(),
-                    "ARM submenu selected index %d -> named target: %s",
+                    "ARM submenu selected index %d -> request kg pre-sync before named target: %s",
                     submenu_selection_,
-                    target.target_name.c_str());
+                    chosen.c_str());
             }
             else
             {

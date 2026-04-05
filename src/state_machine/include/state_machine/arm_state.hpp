@@ -72,8 +72,12 @@ private:
   bool preset_motion_in_progress_ = false;
   bool preset_feedback_gate_ = false;
   bool preset_feedback_query_sent_ = false;
+  bool preset_pre_sync_pending_ = false;
+  bool skip_direct_target_refresh_once_ = false;
   bool kg_sync_requested_ = false;
   bool latest_feedback_valid_ = false;
+
+  std::string pending_named_target_;
 
   rclcpp::Time last_update_time_{0, 0, RCL_ROS_TIME};
   rclcpp::Time last_query_time_{0, 0, RCL_ROS_TIME};
