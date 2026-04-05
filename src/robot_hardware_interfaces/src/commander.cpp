@@ -1,5 +1,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <moveit/move_group_interface/move_group_interface.hpp>
+#include <moveit/robot_state/robot_state.hpp>
 #include <example_interfaces/msg/float64_multi_array.hpp>
 #include <custom_interfaces/msg/arm_named_target.hpp>
 #include <custom_interfaces/msg/arm_pose_target.hpp>
@@ -10,9 +11,11 @@
 
 #include <chrono>
 #include <array>
+#include <algorithm>
+#include <cctype>
+#include <sstream>
 #include <thread>
 #include <unordered_map>
-#include <cmath>
 
 using Float64MultiArray = example_interfaces::msg::Float64MultiArray;
 using ArmNamedTarget = custom_interfaces::msg::ArmNamedTarget;
@@ -21,19 +24,12 @@ using ArmJointTarget = custom_interfaces::msg::ArmJointTarget;
 using GripperCommand = custom_interfaces::msg::GripperCommand;
 using MoveGroupInterface = moveit::planning_interface::MoveGroupInterface;
 
-namespace {
-double pwmToRad(double pwm)
-{
-    const double degree = (pwm - 1500.0) / 1000.0 * 135.0;
-    return degree * M_PI / 180.0;
-}
-}
-
 class Commander {
 public:
     explicit Commander(std::shared_ptr<rclcpp::Node> node) : node_(std::move(node)) {
         RCLCPP_INFO(node_->get_logger(), "Commander node has been started.");
         joint_command_visual_only_ = node_->declare_parameter<bool>("joint_command_visual_only", true);
+        arm_execute_with_moveit_ = node_->declare_parameter<bool>("arm_execute_with_moveit", false);
 
         arm_ = std::make_shared<MoveGroupInterface>(node_, "arm");
         arm_->setMaxVelocityScalingFactor(1.0);
@@ -57,10 +53,6 @@ public:
             "/arm/current_joint_radians",
             10,
             std::bind(&Commander::currentJointRadCallback, this, std::placeholders::_1));
-        current_pwm_sub_ = node_->create_subscription<Float64MultiArray>(
-            "/arm/current_pwm",
-            10,
-            std::bind(&Commander::currentPwmCallback, this, std::placeholders::_1));
         named_target_sub_ = node_->create_subscription<ArmNamedTarget>(
             "/cmd/arm/named_target",
             10,
@@ -80,13 +72,78 @@ public:
             joint_command_visual_only_ ? "MoveIt target sync only (no execute)" : "plan+execute");
     }
 
+    static std::string normalizeTargetName(const std::string &name) {
+        std::string out;
+        out.reserve(name.size());
+        for (const unsigned char ch : name) {
+            if (std::isalnum(ch) != 0) {
+                out.push_back(static_cast<char>(std::tolower(ch)));
+            }
+        }
+        return out;
+    }
+
+    bool resolveNamedTarget(const std::string &requested, std::string &resolved) {
+        const auto targets = arm_->getNamedTargets();
+        if (targets.empty()) {
+            RCLCPP_WARN(node_->get_logger(), "MoveIt returned empty named target list for arm group.");
+            return false;
+        }
+
+        for (const auto &t : targets) {
+            if (t == requested) {
+                resolved = t;
+                return true;
+            }
+        }
+
+        const std::string req_norm = normalizeTargetName(requested);
+        for (const auto &t : targets) {
+            if (normalizeTargetName(t) == req_norm) {
+                resolved = t;
+                RCLCPP_WARN(
+                    node_->get_logger(),
+                    "Named target '%s' normalized to available target '%s'.",
+                    requested.c_str(),
+                    resolved.c_str());
+                return true;
+            }
+        }
+
+        std::ostringstream ss;
+        for (size_t i = 0; i < targets.size(); ++i) {
+            if (i > 0) {
+                ss << ", ";
+            }
+            ss << targets[i];
+        }
+        RCLCPP_ERROR(
+            node_->get_logger(),
+            "Named target '%s' not found. Available targets: [%s]",
+            requested.c_str(),
+            ss.str().c_str());
+        return false;
+    }
+
     void goToNamedTarget(const std::string &target_name) {
+        std::string resolved_target;
+        if (!resolveNamedTarget(target_name, resolved_target)) {
+            return;
+        }
+
         if (!applyHardwareStartStateToMoveIt()) {
             arm_->setStartStateToCurrentState();
         }
-        arm_->setNamedTarget(target_name);
+        const bool accepted = arm_->setNamedTarget(resolved_target);
+        if (!accepted) {
+            RCLCPP_ERROR(
+                node_->get_logger(),
+                "MoveIt rejected named target '%s' after resolution.",
+                resolved_target.c_str());
+            return;
+        }
         planAndExecute(arm_);
-        last_named_target_ = target_name;
+        last_named_target_ = resolved_target;
     }
 
     void goToJointTarget(const std::vector<double> &joints) {
@@ -169,22 +226,31 @@ private:
             return false;
         }
 
-        auto start_state = arm_->getCurrentState(1.0);
-        if (!start_state) {
-            RCLCPP_WARN(node_->get_logger(), "Failed to get MoveIt current state, fallback to default start state.");
+        const auto robot_model = arm_->getRobotModel();
+        if (!robot_model) {
+            RCLCPP_WARN(node_->get_logger(), "MoveIt robot model unavailable, cannot apply hardware start state.");
             return false;
         }
 
-        const auto *joint_model_group = start_state->getJointModelGroup("arm");
+        moveit::core::RobotState start_state(robot_model);
+        start_state.setToDefaultValues();
+
+        const auto *joint_model_group = start_state.getJointModelGroup("arm");
         if (!joint_model_group) {
             RCLCPP_WARN(node_->get_logger(), "MoveIt joint group 'arm' not found, cannot apply hardware start state.");
             return false;
         }
 
         std::vector<double> joints(latest_current_joints_.begin(), latest_current_joints_.end());
-        start_state->setJointGroupPositions(joint_model_group, joints);
-        start_state->update();
-        arm_->setStartState(*start_state);
+        start_state.setJointGroupPositions(joint_model_group, joints);
+        start_state.update();
+        arm_->setStartState(start_state);
+
+        RCLCPP_INFO_THROTTLE(
+            node_->get_logger(),
+            *node_->get_clock(),
+            1000,
+            "Applied hardware-synced start state to MoveIt from cached joints.");
         return true;
     }
 
@@ -250,6 +316,9 @@ private:
                 if (!publishArmTrajectory(plan.trajectory.joint_trajectory)) {
                     RCLCPP_WARN(node_->get_logger(), "Failed to publish planned arm trajectory to /cmd/arm/joint_target.");
                 }
+                if (!arm_execute_with_moveit_) {
+                    return;
+                }
             }
             interface->execute(plan);
         } else {
@@ -313,22 +382,6 @@ private:
         syncJointTargetToMoveIt(joints);
     }
 
-    void currentPwmCallback(const Float64MultiArray::SharedPtr msg) {
-        if (!msg) {
-            return;
-        }
-
-        const auto &pwms = msg->data;
-        if (pwms.size() < 5) {
-            return;
-        }
-
-        for (size_t i = 0; i < latest_current_joints_.size(); ++i) {
-            latest_current_joints_[i] = pwmToRad(pwms[i]);
-        }
-        latest_current_joint_valid_ = true;
-    }
-
     void poseCmdCallback(const ArmPoseTarget::SharedPtr msg) {
         if (!msg) {
             return;
@@ -355,11 +408,11 @@ private:
     rclcpp::Subscription<GripperCommand>::SharedPtr open_gripper_sub_;
     rclcpp::Subscription<Float64MultiArray>::SharedPtr joint_cmd_sub_;
     rclcpp::Subscription<Float64MultiArray>::SharedPtr current_joint_rad_sub_;
-    rclcpp::Subscription<Float64MultiArray>::SharedPtr current_pwm_sub_;
     rclcpp::Subscription<ArmNamedTarget>::SharedPtr named_target_sub_;
     rclcpp::Subscription<ArmPoseTarget>::SharedPtr pose_cmd_sub_;
     rclcpp::Publisher<ArmJointTarget>::SharedPtr arm_joint_target_pub_;
     bool joint_command_visual_only_ = true;
+    bool arm_execute_with_moveit_ = false;
     std::array<double, 5> latest_current_joints_ = {0.0, 0.0, 0.0, 0.0, 0.0};
     bool latest_current_joint_valid_ = false;
 

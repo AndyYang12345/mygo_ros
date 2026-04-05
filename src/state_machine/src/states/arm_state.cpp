@@ -40,42 +40,6 @@ double radToDeg(double rad)
     return rad * 180.0 / static_cast<double>(kPi);
 }
 
-double radToPwm(double rad)
-{
-    const double deg = radToDeg(rad);
-    const double pwm = (deg / 135.0) * 1000.0 + 1500.0;
-    return std::clamp(pwm, 500.0, 2500.0);
-}
-
-bool presetToExpectedJointRad(const std::string &name, std::array<double, kArmJointCount> &out)
-{
-    if (name == "home") {
-        out = {0.0, 0.0, 0.0, 0.0, 0.0};
-        return true;
-    }
-    if (name == "Right Energy Unit") {
-        out = {2.0193, -0.4547, 0.8741, -2.1371, -0.5160};
-        return true;
-    }
-    if (name == "Left Energy Unit") {
-        out = {-2.1418, -0.1861, 0.7139, -2.2431, -0.2168};
-        return true;
-    }
-    if (name == "Side Energy Unit") {
-        out = {-1.4538, 0.1037, 1.3666, 0.0, -0.2286};
-        return true;
-    }
-    if (name == "under_bridge") {
-        out = {0.0895, 1.1263, 1.2064, 0.9613, -0.2568};
-        return true;
-    }
-    if (name == "folded") {
-        out = {-1.6564, 0.5184, -2.0923, -1.3831, -0.3322};
-        return true;
-    }
-    return false;
-}
-
 std::filesystem::path poseSnapshotDir()
 {
     const auto source_path = std::filesystem::path(__FILE__);
@@ -130,7 +94,13 @@ void ArmState::onEnter(RobotStateMachineNode *context)
     preset_feedback_gate_ = false;
     preset_feedback_query_sent_ = false;
     preset_pre_sync_pending_ = false;
+    post_preset_sync_armed_ = false;
+    waiting_post_preset_feedback_ = false;
     skip_direct_target_refresh_once_ = false;
+    rebase_on_next_manual_cycle_ = false;
+    manual_reacquire_required_ = false;
+    require_stick_center_rebase_ = false;
+    manual_session_active_ = false;
     named_target_release_pending_ = false;
     pending_named_target_.clear();
     kg_sync_requested_ = false;
@@ -155,15 +125,19 @@ void ArmState::onEnter(RobotStateMachineNode *context)
 
                 for (size_t i = 0; i < target_pwms_.size(); ++i)
                 {
+                    latest_feedback_pwms_[i] = msg->data[i];
                     latest_feedback_joints_rad_[i] = pwmToRad(msg->data[i]);
                 }
                 latest_feedback_valid_ = true;
+                latest_feedback_time_ = context->now();
 
                 const bool should_update_direct_target =
                     ((!target_joints_initialized_) || waiting_initial_state_ || preset_sync_pending_) &&
                     !skip_direct_target_refresh_once_;
+                const bool force_post_preset_refresh =
+                    post_preset_sync_armed_ && !skip_direct_target_refresh_once_;
 
-                if (should_update_direct_target)
+                if (should_update_direct_target || force_post_preset_refresh)
                 {
                     for (size_t i = 0; i < target_pwms_.size(); ++i)
                     {
@@ -172,6 +146,19 @@ void ArmState::onEnter(RobotStateMachineNode *context)
                     }
                     target_joints_initialized_ = true;
                     waiting_initial_state_ = false;
+                    if (post_preset_sync_armed_)
+                    {
+                        post_preset_sync_armed_ = false;
+                        waiting_post_preset_feedback_ = false;
+                        preset_motion_in_progress_ = false;
+                        manual_reacquire_required_ = false;
+                        rebase_on_next_manual_cycle_ = false;
+                        require_stick_center_rebase_ = true;
+                        manual_session_active_ = false;
+                        RCLCPP_INFO(
+                            context->get_logger(),
+                            "ARM post-preset kg sync applied; waiting stick-center to start manual tuning");
+                    }
                 }
 
                 if (kg_sync_requested_)
@@ -243,16 +230,6 @@ void ArmState::handleButton(
             // "-" is an explicit empty slot: do not publish any target.
             if (!chosen.empty() && chosen != kEmptyPresetSlot)
             {
-                std::array<double, kArmJointCount> expected_rad{};
-                if (presetToExpectedJointRad(chosen, expected_rad))
-                {
-                    for (size_t i = 0; i < kArmJointCount; ++i)
-                    {
-                        target_joints_rad_[i] = expected_rad[i];
-                        target_pwms_[i] = radToPwm(expected_rad[i]);
-                    }
-                }
-
                 target_joints_initialized_ = false;
                 waiting_initial_state_ = true;
                 preset_sync_pending_ = false;
@@ -458,16 +435,18 @@ void ArmState::update(RobotStateMachineNode *context)
             return;
         }
 
+        const std::string exec_target = pending_named_target_;
         auto target = custom_interfaces::msg::ArmNamedTarget();
-        target.target_name = pending_named_target_;
+        target.target_name = exec_target;
         context->getArmNamedTargetPub()->publish(target);
 
         named_target_release_pending_ = false;
         pending_named_target_.clear();
-        target_joints_initialized_ = false;
-        waiting_initial_state_ = true;
+        post_preset_sync_armed_ = false;
         preset_sync_pending_ = true;
         preset_motion_in_progress_ = true;
+        waiting_post_preset_feedback_ = true;
+        manual_reacquire_required_ = true;
         preset_feedback_gate_ = true;
         preset_feedback_query_sent_ = false;
         preset_sync_due_time_ = context->now() + rclcpp::Duration::from_seconds(preset_sync_delay_s_);
@@ -478,30 +457,43 @@ void ArmState::update(RobotStateMachineNode *context)
         return;
     }
 
-    if (preset_motion_in_progress_)
+    if (preset_motion_in_progress_ && context->now() < preset_sync_due_time_)
     {
-        if (context->now() < preset_sync_due_time_)
+        return;
+    }
+
+    const auto now = context->now();
+    if (preset_sync_pending_ && now >= preset_sync_due_time_)
+    {
+        auto query_msg = std_msgs::msg::String();
+        query_msg.data = "kg";
+        context->getArmQueryCurrentPub()->publish(query_msg);
+        last_query_time_ = now;
+        preset_feedback_query_sent_ = true;
+        preset_sync_pending_ = false;
+        post_preset_sync_armed_ = true;
+        if (waiting_post_preset_feedback_)
         {
-            return;
+            preset_motion_in_progress_ = true;
+            RCLCPP_INFO(
+                context->get_logger(),
+                "ARM post-preset kg requested, waiting feedback before enabling joystick");
         }
-        preset_motion_in_progress_ = false;
+        return;
+    }
+
+    if (waiting_post_preset_feedback_)
+    {
+        RCLCPP_WARN_THROTTLE(
+            context->get_logger(),
+            *context->get_clock(),
+            1000,
+            "ARM waiting post-preset kg feedback, joystick control still locked.");
+        return;
     }
 
     if (!target_joints_initialized_)
     {
-        const auto now = context->now();
-
-        if (preset_sync_pending_ && now >= preset_sync_due_time_)
-        {
-            auto query_msg = std_msgs::msg::String();
-            query_msg.data = "kg";
-            context->getArmQueryCurrentPub()->publish(query_msg);
-            last_query_time_ = now;
-            preset_feedback_query_sent_ = true;
-            preset_sync_pending_ = false;
-            return;
-        }
-
         if (!preset_sync_pending_ && (now - last_query_time_).seconds() > 0.35)
         {
             auto query_msg = std_msgs::msg::String();
@@ -517,8 +509,6 @@ void ArmState::update(RobotStateMachineNode *context)
             "ARM waiting kg current state, control publish paused.");
         return;
     }
-
-    const auto now = context->now();
     if (kg_sync_requested_ && (now - last_query_time_).seconds() > kg_query_timeout_s_)
     {
         kg_sync_requested_ = false;
@@ -702,10 +692,119 @@ bool ArmState::applyAxisControl(RobotStateMachineNode *context, double dt)
     const auto &right = context->getRightJoystick();
     const double deadzone = context->getJoystickDeadzone();
 
+    const bool left_centered_now =
+        (std::abs(static_cast<double>(left.x)) < deadzone) &&
+        (std::abs(static_cast<double>(left.y)) < deadzone);
+    const bool right_centered_now =
+        (std::abs(static_cast<double>(right.x)) < deadzone) &&
+        (std::abs(static_cast<double>(right.y)) < deadzone);
+    const bool sticks_centered_now = left_centered_now && right_centered_now;
+
+    if (sticks_centered_now)
+    {
+        manual_session_active_ = false;
+    }
+
+    if (manual_reacquire_required_)
+    {
+        const auto now = context->now();
+        const bool feedback_fresh =
+            latest_feedback_valid_ && ((now - latest_feedback_time_).seconds() <= 0.35);
+
+        if (!feedback_fresh)
+        {
+            if ((now - last_query_time_).seconds() > 0.20)
+            {
+                auto query_msg = std_msgs::msg::String();
+                query_msg.data = "kg";
+                context->getArmQueryCurrentPub()->publish(query_msg);
+                last_query_time_ = now;
+            }
+            return false;
+        }
+
+        for (size_t i = 0; i < target_pwms_.size(); ++i)
+        {
+            target_pwms_[i] = latest_feedback_pwms_[i];
+            target_joints_rad_[i] = latest_feedback_joints_rad_[i];
+        }
+        manual_reacquire_required_ = false;
+        rebase_on_next_manual_cycle_ = false;
+
+        RCLCPP_INFO(
+            context->get_logger(),
+            "ARM manual baseline reset to latest kg pose before joystick control");
+    }
+
+    if (require_stick_center_rebase_)
+    {
+        if (latest_feedback_valid_)
+        {
+            for (size_t i = 0; i < target_pwms_.size(); ++i)
+            {
+                target_pwms_[i] = latest_feedback_pwms_[i];
+                target_joints_rad_[i] = latest_feedback_joints_rad_[i];
+            }
+        }
+
+        if (!sticks_centered_now)
+        {
+            return false;
+        }
+
+        require_stick_center_rebase_ = false;
+        RCLCPP_INFO(
+            context->get_logger(),
+            "ARM joystick centered, manual tuning starts from latest kg pose");
+    }
+
+    if (rebase_on_next_manual_cycle_ && latest_feedback_valid_)
+    {
+        for (size_t i = 0; i < target_pwms_.size(); ++i)
+        {
+            target_pwms_[i] = latest_feedback_pwms_[i];
+            target_joints_rad_[i] = latest_feedback_joints_rad_[i];
+        }
+        rebase_on_next_manual_cycle_ = false;
+    }
+
     const double lx = (std::abs(left.x) < deadzone) ? 0.0 : static_cast<double>(left.x);
     const double ly = (std::abs(left.y) < deadzone) ? 0.0 : static_cast<double>(left.y);
     const double rx = (std::abs(right.x) < deadzone) ? 0.0 : static_cast<double>(right.x);
     const double ry = (std::abs(right.y) < deadzone) ? 0.0 : static_cast<double>(right.y);
+
+    const bool has_manual_input =
+        (std::abs(lx) > 0.0) || (std::abs(ly) > 0.0) || (std::abs(rx) > 0.0) || (std::abs(ry) > 0.0);
+
+    if (has_manual_input && !manual_session_active_)
+    {
+        const auto now = context->now();
+        const bool feedback_fresh =
+            latest_feedback_valid_ && ((now - latest_feedback_time_).seconds() <= 0.35);
+
+        if (!feedback_fresh)
+        {
+            if ((now - last_query_time_).seconds() > 0.20)
+            {
+                auto query_msg = std_msgs::msg::String();
+                query_msg.data = "kg";
+                context->getArmQueryCurrentPub()->publish(query_msg);
+                last_query_time_ = now;
+            }
+            return false;
+        }
+
+        for (size_t i = 0; i < target_pwms_.size(); ++i)
+        {
+            target_pwms_[i] = latest_feedback_pwms_[i];
+            target_joints_rad_[i] = latest_feedback_joints_rad_[i];
+        }
+        manual_session_active_ = true;
+
+        RCLCPP_INFO(
+            context->get_logger(),
+            "ARM manual session started from fresh kg baseline");
+    }
 
     const auto &speed = precision_mode_ ? max_speed_precision_pwm_s_ : max_speed_high_pwm_s_;
 

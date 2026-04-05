@@ -73,7 +73,13 @@ private:
   bool preset_feedback_gate_ = false;
   bool preset_feedback_query_sent_ = false;
   bool preset_pre_sync_pending_ = false;
+  bool post_preset_sync_armed_ = false;
+  bool waiting_post_preset_feedback_ = false;
   bool skip_direct_target_refresh_once_ = false;
+  bool rebase_on_next_manual_cycle_ = false;
+  bool manual_reacquire_required_ = false;
+  bool require_stick_center_rebase_ = false;
+  bool manual_session_active_ = false;
   bool named_target_release_pending_ = false;
   bool kg_sync_requested_ = false;
   bool latest_feedback_valid_ = false;
@@ -85,7 +91,9 @@ private:
   rclcpp::Time preset_sync_due_time_{0, 0, RCL_ROS_TIME};
   rclcpp::Time named_target_release_time_{0, 0, RCL_ROS_TIME};
   rclcpp::Time next_sync_query_time_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time latest_feedback_time_{0, 0, RCL_ROS_TIME};
   rclcpp::Subscription<example_interfaces::msg::Float64MultiArray>::SharedPtr current_joint_sub_;
+  std::array<double, 5> latest_feedback_pwms_ = {1500.0, 1500.0, 1500.0, 1500.0, 1500.0};
   std::array<double, 5> latest_feedback_joints_rad_ = {0.0, 0.0, 0.0, 0.0, 0.0};
 
   std::array<double, 5> max_speed_high_pwm_s_ = {260.0, 220.0, 180.0, 180.0, 220.0};
