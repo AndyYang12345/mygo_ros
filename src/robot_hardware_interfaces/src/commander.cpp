@@ -12,6 +12,7 @@
 #include <array>
 #include <thread>
 #include <unordered_map>
+#include <cmath>
 
 using Float64MultiArray = example_interfaces::msg::Float64MultiArray;
 using ArmNamedTarget = custom_interfaces::msg::ArmNamedTarget;
@@ -19,6 +20,14 @@ using ArmPoseTarget = custom_interfaces::msg::ArmPoseTarget;
 using ArmJointTarget = custom_interfaces::msg::ArmJointTarget;
 using GripperCommand = custom_interfaces::msg::GripperCommand;
 using MoveGroupInterface = moveit::planning_interface::MoveGroupInterface;
+
+namespace {
+double pwmToRad(double pwm)
+{
+    const double degree = (pwm - 1500.0) / 1000.0 * 135.0;
+    return degree * M_PI / 180.0;
+}
+}
 
 class Commander {
 public:
@@ -48,6 +57,10 @@ public:
             "/arm/current_joint_radians",
             10,
             std::bind(&Commander::currentJointRadCallback, this, std::placeholders::_1));
+        current_pwm_sub_ = node_->create_subscription<Float64MultiArray>(
+            "/arm/current_pwm",
+            10,
+            std::bind(&Commander::currentPwmCallback, this, std::placeholders::_1));
         named_target_sub_ = node_->create_subscription<ArmNamedTarget>(
             "/cmd/arm/named_target",
             10,
@@ -300,6 +313,22 @@ private:
         syncJointTargetToMoveIt(joints);
     }
 
+    void currentPwmCallback(const Float64MultiArray::SharedPtr msg) {
+        if (!msg) {
+            return;
+        }
+
+        const auto &pwms = msg->data;
+        if (pwms.size() < 5) {
+            return;
+        }
+
+        for (size_t i = 0; i < latest_current_joints_.size(); ++i) {
+            latest_current_joints_[i] = pwmToRad(pwms[i]);
+        }
+        latest_current_joint_valid_ = true;
+    }
+
     void poseCmdCallback(const ArmPoseTarget::SharedPtr msg) {
         if (!msg) {
             return;
@@ -326,6 +355,7 @@ private:
     rclcpp::Subscription<GripperCommand>::SharedPtr open_gripper_sub_;
     rclcpp::Subscription<Float64MultiArray>::SharedPtr joint_cmd_sub_;
     rclcpp::Subscription<Float64MultiArray>::SharedPtr current_joint_rad_sub_;
+    rclcpp::Subscription<Float64MultiArray>::SharedPtr current_pwm_sub_;
     rclcpp::Subscription<ArmNamedTarget>::SharedPtr named_target_sub_;
     rclcpp::Subscription<ArmPoseTarget>::SharedPtr pose_cmd_sub_;
     rclcpp::Publisher<ArmJointTarget>::SharedPtr arm_joint_target_pub_;

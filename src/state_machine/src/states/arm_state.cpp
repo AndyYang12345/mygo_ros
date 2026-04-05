@@ -40,6 +40,42 @@ double radToDeg(double rad)
     return rad * 180.0 / static_cast<double>(kPi);
 }
 
+double radToPwm(double rad)
+{
+    const double deg = radToDeg(rad);
+    const double pwm = (deg / 135.0) * 1000.0 + 1500.0;
+    return std::clamp(pwm, 500.0, 2500.0);
+}
+
+bool presetToExpectedJointRad(const std::string &name, std::array<double, kArmJointCount> &out)
+{
+    if (name == "home") {
+        out = {0.0, 0.0, 0.0, 0.0, 0.0};
+        return true;
+    }
+    if (name == "Right Energy Unit") {
+        out = {2.0193, -0.4547, 0.8741, -2.1371, -0.5160};
+        return true;
+    }
+    if (name == "Left Energy Unit") {
+        out = {-2.1418, -0.1861, 0.7139, -2.2431, -0.2168};
+        return true;
+    }
+    if (name == "Side Energy Unit") {
+        out = {-1.4538, 0.1037, 1.3666, 0.0, -0.2286};
+        return true;
+    }
+    if (name == "under_bridge") {
+        out = {0.0895, 1.1263, 1.2064, 0.9613, -0.2568};
+        return true;
+    }
+    if (name == "folded") {
+        out = {-1.6564, 0.5184, -2.0923, -1.3831, -0.3322};
+        return true;
+    }
+    return false;
+}
+
 std::filesystem::path poseSnapshotDir()
 {
     const auto source_path = std::filesystem::path(__FILE__);
@@ -95,6 +131,7 @@ void ArmState::onEnter(RobotStateMachineNode *context)
     preset_feedback_query_sent_ = false;
     preset_pre_sync_pending_ = false;
     skip_direct_target_refresh_once_ = false;
+    named_target_release_pending_ = false;
     pending_named_target_.clear();
     kg_sync_requested_ = false;
     latest_feedback_valid_ = false;
@@ -155,24 +192,16 @@ void ArmState::onEnter(RobotStateMachineNode *context)
 
                 if (preset_pre_sync_pending_ && !pending_named_target_.empty())
                 {
-                    auto target = custom_interfaces::msg::ArmNamedTarget();
-                    target.target_name = pending_named_target_;
-                    context->getArmNamedTargetPub()->publish(target);
-
                     preset_pre_sync_pending_ = false;
-                    pending_named_target_.clear();
-                    target_joints_initialized_ = false;
-                    waiting_initial_state_ = true;
-                    preset_sync_pending_ = true;
-                    preset_motion_in_progress_ = true;
-                    preset_feedback_gate_ = true;
-                    preset_feedback_query_sent_ = false;
-                    preset_sync_due_time_ = context->now() + rclcpp::Duration::from_seconds(preset_sync_delay_s_);
+                    named_target_release_pending_ = true;
+                    named_target_release_time_ =
+                        context->now() + rclcpp::Duration::from_seconds(named_target_release_delay_s_);
 
                     RCLCPP_INFO(
                         context->get_logger(),
-                        "ARM preset pre-sync done, execute named target: %s",
-                        target.target_name.c_str());
+                        "ARM preset pre-sync done, delay %.0f ms then execute named target: %s",
+                        named_target_release_delay_s_ * 1000.0,
+                        pending_named_target_.c_str());
                 }
             });
     }
@@ -214,14 +243,25 @@ void ArmState::handleButton(
             // "-" is an explicit empty slot: do not publish any target.
             if (!chosen.empty() && chosen != kEmptyPresetSlot)
             {
+                std::array<double, kArmJointCount> expected_rad{};
+                if (presetToExpectedJointRad(chosen, expected_rad))
+                {
+                    for (size_t i = 0; i < kArmJointCount; ++i)
+                    {
+                        target_joints_rad_[i] = expected_rad[i];
+                        target_pwms_[i] = radToPwm(expected_rad[i]);
+                    }
+                }
+
                 target_joints_initialized_ = false;
                 waiting_initial_state_ = true;
                 preset_sync_pending_ = false;
-                preset_motion_in_progress_ = false;
+                preset_motion_in_progress_ = true;
                 preset_feedback_gate_ = true;
                 preset_feedback_query_sent_ = true;
                 preset_pre_sync_pending_ = true;
                 skip_direct_target_refresh_once_ = true;
+                named_target_release_pending_ = false;
                 pending_named_target_ = chosen;
 
                 auto query_msg = std_msgs::msg::String();
@@ -408,6 +448,33 @@ void ArmState::update(RobotStateMachineNode *context)
 {
     if (submenu_active_)
     {
+        return;
+    }
+
+    if (named_target_release_pending_)
+    {
+        if (context->now() < named_target_release_time_)
+        {
+            return;
+        }
+
+        auto target = custom_interfaces::msg::ArmNamedTarget();
+        target.target_name = pending_named_target_;
+        context->getArmNamedTargetPub()->publish(target);
+
+        named_target_release_pending_ = false;
+        pending_named_target_.clear();
+        target_joints_initialized_ = false;
+        waiting_initial_state_ = true;
+        preset_sync_pending_ = true;
+        preset_motion_in_progress_ = true;
+        preset_feedback_gate_ = true;
+        preset_feedback_query_sent_ = false;
+        preset_sync_due_time_ = context->now() + rclcpp::Duration::from_seconds(preset_sync_delay_s_);
+
+        RCLCPP_INFO(
+            context->get_logger(),
+            "ARM execute delayed named target after kg pre-sync");
         return;
     }
 

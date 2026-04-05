@@ -74,6 +74,7 @@ private:
   bool preset_feedback_query_sent_ = false;
   bool preset_pre_sync_pending_ = false;
   bool skip_direct_target_refresh_once_ = false;
+  bool named_target_release_pending_ = false;
   bool kg_sync_requested_ = false;
   bool latest_feedback_valid_ = false;
 
@@ -82,6 +83,7 @@ private:
   rclcpp::Time last_update_time_{0, 0, RCL_ROS_TIME};
   rclcpp::Time last_query_time_{0, 0, RCL_ROS_TIME};
   rclcpp::Time preset_sync_due_time_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time named_target_release_time_{0, 0, RCL_ROS_TIME};
   rclcpp::Time next_sync_query_time_{0, 0, RCL_ROS_TIME};
   rclcpp::Subscription<example_interfaces::msg::Float64MultiArray>::SharedPtr current_joint_sub_;
   std::array<double, 5> latest_feedback_joints_rad_ = {0.0, 0.0, 0.0, 0.0, 0.0};
@@ -89,6 +91,7 @@ private:
   std::array<double, 5> max_speed_high_pwm_s_ = {260.0, 220.0, 180.0, 180.0, 220.0};
   std::array<double, 5> max_speed_precision_pwm_s_ = {85.0, 70.0, 55.0, 55.0, 70.0};
   double preset_sync_delay_s_ = 1.2;
+  double named_target_release_delay_s_ = 0.08;
   double kg_sync_interval_s_ = 2.0;
   double kg_query_timeout_s_ = 0.8;
   double min_step_pwm_ = 0.6;
