@@ -49,11 +49,11 @@ public:
 		gripper_motion_time_ms_ = this->declare_parameter<int>("gripper_motion_time_ms", 1000);
 		direct_joint_time_ms_ = this->declare_parameter<int>("direct_joint_time_ms", 1000);
 		gripper_open_pwm_ = static_cast<int>(std::lround(clamp(
-			this->declare_parameter<double>("gripper_open_pwm", 1800.0),
+			this->declare_parameter<double>("gripper_open_pwm", 1400.0),
 			500.0,
 			2500.0)));
 		gripper_close_pwm_ = static_cast<int>(std::lround(clamp(
-			this->declare_parameter<double>("gripper_close_pwm", 2050.0),
+			this->declare_parameter<double>("gripper_close_pwm", 1650.0),
 			500.0,
 			2500.0)));
 		arm_joint_names_ = this->declare_parameter<std::vector<std::string>>(
