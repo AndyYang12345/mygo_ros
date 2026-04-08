@@ -8,6 +8,7 @@
 #include <custom_interfaces/msg/joystick_intent.hpp>
 #include <custom_interfaces/msg/trigger_intent.hpp>
 #include <array>
+#include <cmath>
 #include <vector>
 
 using std::placeholders::_1;
@@ -17,6 +18,11 @@ class JoystickParser : public rclcpp::Node
 public:
   JoystickParser() : Node("joystick_parser")
   {
+        enable_axis_rate_filter_ = this->declare_parameter<bool>("enable_axis_rate_filter", false);
+        max_axis_change_rate_ = this->declare_parameter<double>("max_axis_change_rate", 50.0);
+        axis_rate_filter_indices_ = this->declare_parameter<std::vector<int64_t>>(
+                "axis_rate_filter_indices", std::vector<int64_t>{0, 1});
+
     create_subscriptions(); // 批量创建订阅器
     create_publishers();    // 批量创建发布器
     timer_ = this->create_wall_timer(
@@ -37,7 +43,7 @@ private:
     // joy回调函数，解析按钮状态并发布ButtonIntent消息
     void joy_callback(const sensor_msgs::msg::Joy &msg)
     {
-        last_axes_ = msg.axes; // 轴状态需要在这里更新，以便定时器回调函数能够获取最新的轴状态
+        last_axes_ = apply_axis_rate_filter(msg.axes, rclcpp::Time(msg.header.stamp));
         publish_button_intent(msg); //在joy回调函数中调用publish_button_intent来处理按钮状态的变化
         publish_combo_intent(); // 在joy回调函数中调用publish_combo_intent来检测组合按键
     }
@@ -132,6 +138,43 @@ private:
         return 0.0F;
     }
 
+    std::vector<float> apply_axis_rate_filter(const std::vector<float> &raw_axes, const rclcpp::Time &stamp)
+    {
+        if (!enable_axis_rate_filter_ || max_axis_change_rate_ <= 0.0) {
+            last_axes_stamp_ = stamp;
+            has_last_axes_stamp_ = true;
+            return raw_axes;
+        }
+
+        if (last_axes_.size() != raw_axes.size() || !has_last_axes_stamp_) {
+            last_axes_stamp_ = stamp;
+            has_last_axes_stamp_ = true;
+            return raw_axes;
+        }
+
+        const double dt = (stamp - last_axes_stamp_).seconds();
+        last_axes_stamp_ = stamp;
+        if (dt <= 1e-6) {
+            return raw_axes;
+        }
+
+        std::vector<float> filtered_axes = raw_axes;
+        for (const int64_t axis_idx : axis_rate_filter_indices_) {
+            if (axis_idx < 0 || static_cast<size_t>(axis_idx) >= raw_axes.size()) {
+                continue;
+            }
+
+            const size_t index = static_cast<size_t>(axis_idx);
+            const double delta = static_cast<double>(raw_axes[index] - last_axes_[index]);
+            const double rate = std::fabs(delta) / dt;
+            if (rate > max_axis_change_rate_) {
+                filtered_axes[index] = last_axes_[index];
+            }
+        }
+
+        return filtered_axes;
+    }
+
     rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr subscription_;
     rclcpp::Publisher<custom_interfaces::msg::ComboIntent>::SharedPtr combo_intent_pub_;
     rclcpp::Publisher<custom_interfaces::msg::ButtonIntent>::SharedPtr button_intent_pub_;
@@ -139,6 +182,11 @@ private:
     rclcpp::Publisher<custom_interfaces::msg::TriggerIntent>::SharedPtr trigger_intent_pub_;
     std::vector<int32_t> last_buttons_;
     std::vector<float> last_axes_;
+    bool enable_axis_rate_filter_ = true;
+    double max_axis_change_rate_ = 50.0;
+    std::vector<int64_t> axis_rate_filter_indices_;
+    rclcpp::Time last_axes_stamp_{0, 0, RCL_ROS_TIME};
+    bool has_last_axes_stamp_ = false;
     rclcpp::TimerBase::SharedPtr timer_;
     float DEADZONE = 0.1F;
 };
