@@ -183,7 +183,7 @@ private:
     std::vector<int32_t> last_buttons_;
     std::vector<float> last_axes_;
     bool enable_axis_rate_filter_ = true;
-    double max_axis_change_rate_ = 50.0;
+    double max_axis_change_rate_ = 10.0;
     std::vector<int64_t> axis_rate_filter_indices_;
     rclcpp::Time last_axes_stamp_{0, 0, RCL_ROS_TIME};
     bool has_last_axes_stamp_ = false;
