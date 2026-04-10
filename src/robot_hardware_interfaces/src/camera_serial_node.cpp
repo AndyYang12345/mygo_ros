@@ -17,6 +17,7 @@
 
 #include <custom_interfaces/msg/robot_state.hpp>
 #include <example_interfaces/msg/float64_multi_array.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/empty.hpp>
 #include <std_msgs/msg/string.hpp>
 
@@ -77,6 +78,9 @@ public:
         connection_pub_ = this->create_publisher<std_msgs::msg::String>("/status/camera/connection", status_qos);
         vision_app_state_pub_ = this->create_publisher<std_msgs::msg::String>("/status/camera/vision_app_state", status_qos);
         vision_track_state_pub_ = this->create_publisher<std_msgs::msg::String>("/status/camera/vision_track_state", status_qos);
+        target_found_pub_ = this->create_publisher<std_msgs::msg::Bool>("/status/camera/target_found", status_qos);
+        can_scan_pub_ = this->create_publisher<std_msgs::msg::Bool>("/status/camera/can_scan", status_qos);
+        target_pixel_pub_ = this->create_publisher<std_msgs::msg::String>("/status/camera/target_pixel", status_qos);
         direct_pwm_pub_ = this->create_publisher<example_interfaces::msg::Float64MultiArray>(
             "/cmd/arm/direct_pwm_command",
             10);
@@ -160,6 +164,12 @@ private:
         out.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
         out.push_back(static_cast<uint8_t>((value >> 16) & 0xFF));
         out.push_back(static_cast<uint8_t>((value >> 24) & 0xFF));
+    }
+
+    static void append_u16_le(std::vector<uint8_t> &out, uint16_t value)
+    {
+        out.push_back(static_cast<uint8_t>(value & 0xFF));
+        out.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
     }
 
     static uint32_t read_u32_le(const uint8_t *ptr)
@@ -531,6 +541,44 @@ private:
         return !confirm.empty() && !app_id.empty();
     }
 
+    std::vector<uint8_t> build_vision_start_body(const std::string &request)
+    {
+        int yaw_pwm = -1;
+        int pitch_pwm = -1;
+
+        std::stringstream ss(request);
+        std::string item;
+        while (std::getline(ss, item, ',')) {
+            const auto token = trim(item);
+            const auto pos = token.find(':');
+            if (pos == std::string::npos) {
+                continue;
+            }
+            const auto key = trim(token.substr(0, pos));
+            const auto value = trim(token.substr(pos + 1));
+            try {
+                if (key == "yaw_pwm") {
+                    yaw_pwm = std::stoi(value);
+                } else if (key == "pitch_pwm") {
+                    pitch_pwm = std::stoi(value);
+                }
+            } catch (...) {
+                continue;
+            }
+        }
+
+        if (yaw_pwm < 500 || yaw_pwm > 2500 || pitch_pwm < 500 || pitch_pwm > 2500) {
+            return {};
+        }
+
+        std::vector<uint8_t> body;
+        body.reserve(5);
+        body.push_back(0xFE);
+        append_u16_le(body, static_cast<uint16_t>(yaw_pwm));
+        append_u16_le(body, static_cast<uint16_t>(pitch_pwm));
+        return body;
+    }
+
     void publish_status(const std::string &text)
     {
         std_msgs::msg::String msg;
@@ -571,6 +619,39 @@ private:
         std_msgs::msg::String msg;
         msg.data = state;
         vision_track_state_pub_->publish(msg);
+    }
+
+    void publish_target_found(bool found)
+    {
+        if (found == last_target_found_) {
+            return;
+        }
+        last_target_found_ = found;
+        std_msgs::msg::Bool msg;
+        msg.data = found;
+        target_found_pub_->publish(msg);
+    }
+
+    void publish_can_scan(bool can_scan)
+    {
+        if (can_scan == last_can_scan_) {
+            return;
+        }
+        last_can_scan_ = can_scan;
+        std_msgs::msg::Bool msg;
+        msg.data = can_scan;
+        can_scan_pub_->publish(msg);
+    }
+
+    void publish_target_pixel(const std::string &pixel)
+    {
+        if (pixel == last_target_pixel_) {
+            return;
+        }
+        last_target_pixel_ = pixel;
+        std_msgs::msg::String msg;
+        msg.data = pixel;
+        target_pixel_pub_->publish(msg);
     }
 
     void publish_response_result(const std::string &action, const ProtocolFrame &resp)
@@ -638,9 +719,14 @@ private:
         publish_response_result("exit_app", resp.value());
     }
 
-    void on_vision_start(const std_msgs::msg::String::SharedPtr)
+    void on_vision_start(const std_msgs::msg::String::SharedPtr msg)
     {
-        const auto resp = send_and_wait_resp(APP_CMD_VISION_START, {});
+        std::vector<uint8_t> body;
+        if (msg) {
+            body = build_vision_start_body(msg->data);
+        }
+
+        const auto resp = send_and_wait_resp(APP_CMD_VISION_START, body);
         if (!resp.has_value()) {
             publish_status("vision_start failed: no response");
             return;
@@ -809,6 +895,9 @@ private:
         if (!resp.has_value()) {
             publish_vision_app_state("DISCONNECTED");
             publish_vision_track_state("DISCONNECTED");
+            publish_target_found(false);
+            publish_can_scan(false);
+            publish_target_pixel("-1,-1");
             return;
         }
 
@@ -826,10 +915,19 @@ private:
         const std::string &app_state = fields[0];
         const std::string &track_state = fields[1];
         const bool active = (fields[2] == "1");
+        const bool target_found = (fields[3] == "1");
         const std::string &command = fields[5];
 
         publish_vision_app_state(app_state);
         publish_vision_track_state(track_state);
+        publish_target_found(target_found);
+
+        if (fields.size() > 7) {
+            publish_can_scan(fields[7] == "1");
+        }
+        if (fields.size() > 9) {
+            publish_target_pixel(fields[8] + "," + fields[9]);
+        }
 
         if (!active || command.empty()) {
             return;
@@ -982,6 +1080,9 @@ private:
     std::string vision_state_name_{kVisionStateName};
     std::string last_app_state_{"UNKNOWN"};
     std::string last_track_state_{"UNKNOWN"};
+    bool last_target_found_{false};
+    bool last_can_scan_{false};
+    std::string last_target_pixel_{"-1,-1"};
     std::string exit_confirm_word_;
 
     std::array<int, kTotalServoCount> last_arm_pwms_{};
@@ -998,6 +1099,9 @@ private:
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr connection_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr vision_app_state_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr vision_track_state_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr target_found_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr can_scan_pub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr target_pixel_pub_;
     rclcpp::Publisher<example_interfaces::msg::Float64MultiArray>::SharedPtr direct_pwm_pub_;
 
     rclcpp::TimerBase::SharedPtr status_timer_;

@@ -29,6 +29,7 @@
 #include "custom_interfaces/msg/trigger_intent.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "std_msgs/msg/u_int8.hpp"
 
@@ -463,6 +464,24 @@ public:
     camera_protocol_status_ = text.empty() ? "waiting for camera node" : text;
   }
 
+  void updateCameraTargetFound(bool found)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    camera_target_found_ = found;
+  }
+
+  void updateCameraCanScan(bool can_scan)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    camera_can_scan_ = can_scan;
+  }
+
+  void updateCameraTargetPixel(const std::string & pixel)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    camera_target_pixel_ = pixel.empty() ? "-1,-1" : pixel;
+  }
+
   bool isLbSubmenuAllowed()
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -495,6 +514,9 @@ protected:
     std::string camera_app_state;
     std::string camera_track_state;
     std::string camera_protocol_status;
+    bool camera_target_found = false;
+    bool camera_can_scan = false;
+    std::string camera_target_pixel;
 
     {
       std::lock_guard<std::mutex> lock(mutex_);
@@ -525,6 +547,9 @@ protected:
       camera_app_state = camera_app_state_;
       camera_track_state = camera_track_state_;
       camera_protocol_status = camera_protocol_status_;
+      camera_target_found = camera_target_found_;
+      camera_can_scan = camera_can_scan_;
+      camera_target_pixel = camera_target_pixel_;
     }
 
     QPainter painter(this);
@@ -565,7 +590,10 @@ protected:
       camera_connection_state,
       camera_app_state,
       camera_track_state,
-      camera_protocol_status);
+      camera_protocol_status,
+      camera_target_found,
+      camera_can_scan,
+      camera_target_pixel);
 
     const bool show_pole_cards = (state_name == "POLE");
     const bool show_main_menu = (state_name == "MENU");
@@ -998,7 +1026,10 @@ private:
     const std::string & connection_state,
     const std::string & app_state,
     const std::string & track_state,
-    const std::string & protocol_status)
+    const std::string & protocol_status,
+    bool target_found,
+    bool can_scan,
+    const std::string & target_pixel)
   {
     painter.save();
 
@@ -1078,7 +1109,11 @@ private:
     const QRectF foot_rect(panel_rect.left() + 18.0, panel_rect.bottom() - 44.0, panel_rect.width() - 36.0, 26.0);
     painter.setPen(QColor(176, 202, 220));
     painter.setFont(foot_font);
-    const QString foot_text = QString::fromStdString(protocol_status.empty() ? "waiting for camera node" : protocol_status);
+    std::string foot_status = protocol_status.empty() ? "waiting for camera node" : protocol_status;
+    foot_status += " | TF:" + std::string(target_found ? "1" : "0");
+    foot_status += " CS:" + std::string(can_scan ? "1" : "0");
+    foot_status += " TP:" + target_pixel;
+    const QString foot_text = QString::fromStdString(foot_status);
     const QFontMetrics foot_fm(foot_font);
     painter.drawText(
       foot_rect,
@@ -1209,6 +1244,9 @@ private:
   std::string camera_app_state_ = "DISCONNECTED";
   std::string camera_track_state_ = "DISCONNECTED";
   std::string camera_protocol_status_ = "waiting for camera node";
+  bool camera_target_found_ = false;
+  bool camera_can_scan_ = false;
+  std::string camera_target_pixel_ = "-1,-1";
 
   std::vector<std::string> main_labels_ = {
     "ARM", "VISION_TASK", "CHASSIS", "POLE", "IDLE", "BALL", "CHASSIS", "ARM"};
@@ -1363,6 +1401,36 @@ public:
         widget_->updateCameraProtocolStatus(msg->data);
       });
 
+    camera_target_found_sub_ = create_subscription<std_msgs::msg::Bool>(
+      "/status/camera/target_found", status_qos,
+      [this](const std_msgs::msg::Bool::SharedPtr msg)
+      {
+        if (!msg || !widget_) {
+          return;
+        }
+        widget_->updateCameraTargetFound(msg->data);
+      });
+
+    camera_can_scan_sub_ = create_subscription<std_msgs::msg::Bool>(
+      "/status/camera/can_scan", status_qos,
+      [this](const std_msgs::msg::Bool::SharedPtr msg)
+      {
+        if (!msg || !widget_) {
+          return;
+        }
+        widget_->updateCameraCanScan(msg->data);
+      });
+
+    camera_target_pixel_sub_ = create_subscription<std_msgs::msg::String>(
+      "/status/camera/target_pixel", status_qos,
+      [this](const std_msgs::msg::String::SharedPtr msg)
+      {
+        if (!msg || !widget_) {
+          return;
+        }
+        widget_->updateCameraTargetPixel(msg->data);
+      });
+
     RCLCPP_INFO(get_logger(), "menu_ui_node started.");
   }
 
@@ -1379,6 +1447,9 @@ private:
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr camera_app_state_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr camera_track_state_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr camera_protocol_sub_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr camera_target_found_sub_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr camera_can_scan_sub_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr camera_target_pixel_sub_;
 };
 
 int main(int argc, char ** argv)

@@ -1,20 +1,25 @@
 #include "state_machine/vision_task_state.hpp"
 
 #include <array>
+#include <algorithm>
+#include <cmath>
 
-#include "custom_interfaces/msg/arm_joint_target.hpp"
+#include "example_interfaces/msg/float64_multi_array.hpp"
 #include "state_machine/robot_state_machine_node.hpp"
 
 namespace
 {
-constexpr double kPi = 3.14159265358979323846;
 constexpr std::array<double, 5> kVisionInitPwms = {
     1500.0, 1350.0, 2300.0, 1500.0, 1500.0};
+constexpr int kButtonRB = 5;
+constexpr uint8_t kPressEvent = 0;
+constexpr uint8_t kReleaseEvent = 1;
 
-double pwmToRad(double pwm)
+void publishDirectPwm(RobotStateMachineNode *context, const std::array<double, 5> &pwms)
 {
-    const double degree = (pwm - 1500.0) / 1000.0 * 135.0;
-    return degree * kPi / 180.0;
+    example_interfaces::msg::Float64MultiArray msg;
+    msg.data.assign(pwms.begin(), pwms.end());
+    context->getArmDirectPwmPub()->publish(msg);
 }
 }
 
@@ -35,31 +40,24 @@ uint8_t VisionTaskState::getSubState() const
 
 void VisionTaskState::onEnter(RobotStateMachineNode *context)
 {
-    context->setMenuItems({"A开始识别", "B结束识别并返回菜单"});
+    tracking_started_ = false;
+    precision_mode_ = false;
+    right_y_selected_servo_ = 2;
+    dpad_switch_latched_ = false;
+    target_pwms_ = kVisionInitPwms;
+
+    context->setMenuItems({"A开始追踪", "B结束识别并返回菜单"});
     context->setMenuSelection(0);
 
-    auto arm_target = custom_interfaces::msg::ArmJointTarget();
-    arm_target.joints.reserve(kVisionInitPwms.size());
-    for (const double pwm : kVisionInitPwms)
-    {
-        arm_target.joints.push_back(pwmToRad(pwm));
-    }
-    context->getArmJointTargetPub()->publish(arm_target);
-    RCLCPP_INFO(
-        context->get_logger(),
-        "Sent vision arm init joint target: [%.3f, %.3f, %.3f, %.3f, %.3f]",
-        arm_target.joints[0],
-        arm_target.joints[1],
-        arm_target.joints[2],
-        arm_target.joints[3],
-        arm_target.joints[4]);
+    publishDirectPwm(context, target_pwms_);
+    RCLCPP_INFO(context->get_logger(), "Sent vision preset direct PWM target");
 
-    auto camera_stop = std_msgs::msg::String();
-    camera_stop.data = "stop";
-    context->getCameraVisionStopPub()->publish(camera_stop);
+    auto camera_start = std_msgs::msg::String();
+    camera_start.data = "start";
+    context->getCameraStartAppPub()->publish(camera_start);
 
     RCLCPP_INFO(context->get_logger(), "Entered VISION_TASK state");
-    RCLCPP_INFO(context->get_logger(), "Requested camera vision task reset to STOPPED");
+    RCLCPP_INFO(context->get_logger(), "Requested camera recognition START, waiting for A to enable tracking");
 }
 
 void VisionTaskState::onExit(RobotStateMachineNode *context)
@@ -82,9 +80,11 @@ void VisionTaskState::handleButton(
     if (msg->button_id == 0)
     {
         auto camera_start = std_msgs::msg::String();
-        camera_start.data = "start";
+        camera_start.data = "yaw_pwm:" + std::to_string(static_cast<int>(std::lround(target_pwms_[0]))) +
+                            ",pitch_pwm:" + std::to_string(static_cast<int>(std::lround(target_pwms_[3])));
         context->getCameraVisionStartPub()->publish(camera_start);
-        RCLCPP_INFO(context->get_logger(), "Requested camera vision task START");
+        tracking_started_ = true;
+        RCLCPP_INFO(context->get_logger(), "Requested camera tracking START with init pose: %s", camera_start.data.c_str());
         return;
     }
 
@@ -96,6 +96,16 @@ void VisionTaskState::handleButton(
         RCLCPP_INFO(context->get_logger(), "Requested camera vision task STOP");
 
         context->changeState(4);
+        return;
+    }
+
+    if (msg->button_id == kButtonRB)
+    {
+        precision_mode_ = !precision_mode_;
+        RCLCPP_INFO(
+            context->get_logger(),
+            "VISION manual mode switched to: %s",
+            precision_mode_ ? "PRECISION" : "HIGH_SPEED");
     }
 }
 
@@ -103,8 +113,93 @@ void VisionTaskState::handleJoystick(
     RobotStateMachineNode *context,
     const custom_interfaces::msg::JoystickIntent::SharedPtr msg)
 {
-    (void)context;
-    (void)msg;
+    if (tracking_started_)
+    {
+        return;
+    }
+
+    const double deadzone = context->getJoystickDeadzone();
+    const double speed_scale = precision_mode_ ? 12.0 : 24.0;
+
+    const double lx = (std::abs(static_cast<double>(msg->x)) < deadzone) ? 0.0 : static_cast<double>(msg->x);
+    const double ly = (std::abs(static_cast<double>(msg->y)) < deadzone) ? 0.0 : static_cast<double>(msg->y);
+
+    bool changed = false;
+    if (msg->joystick_id == 1)
+    {
+        const bool centered = std::abs(lx) < 1e-6 && std::abs(ly) < 1e-6;
+        if (centered)
+        {
+            return;
+        }
+
+        const double delta_x = speed_scale * lx;
+        const double delta_y = speed_scale * ly;
+        if (std::abs(delta_x) >= 1.0)
+        {
+            target_pwms_[0] += delta_x;
+            changed = true;
+        }
+        if (std::abs(delta_y) >= 1.0)
+        {
+            target_pwms_[1] += delta_y;
+            changed = true;
+        }
+    }
+    else if (msg->joystick_id == 2)
+    {
+        const double y = static_cast<double>(msg->y);
+        const double threshold = 0.6;
+        const double reset_threshold = 0.2;
+
+        if (!dpad_switch_latched_ && y >= threshold)
+        {
+            right_y_selected_servo_ = 3;
+            dpad_switch_latched_ = true;
+            RCLCPP_INFO(context->get_logger(), "VISION right-stick-y target switched to servo 3");
+        }
+        else if (!dpad_switch_latched_ && y <= -threshold)
+        {
+            right_y_selected_servo_ = 2;
+            dpad_switch_latched_ = true;
+            RCLCPP_INFO(context->get_logger(), "VISION right-stick-y target switched to servo 2");
+        }
+        else if (std::abs(y) < reset_threshold)
+        {
+            dpad_switch_latched_ = false;
+        }
+
+        const double rx = (std::abs(static_cast<double>(msg->x)) < deadzone) ? 0.0 : static_cast<double>(msg->x);
+        const double ry = (std::abs(static_cast<double>(msg->y)) < deadzone) ? 0.0 : static_cast<double>(msg->y);
+        const double delta_rx = speed_scale * rx;
+        const double delta_ry = speed_scale * ry;
+        if (std::abs(delta_rx) >= 1.0)
+        {
+            target_pwms_[4] += delta_rx;
+            changed = true;
+        }
+        if (std::abs(delta_ry) >= 1.0)
+        {
+            if (right_y_selected_servo_ == 2)
+            {
+                target_pwms_[right_y_selected_servo_] += delta_ry;
+            }
+            else
+            {
+                target_pwms_[right_y_selected_servo_] -= delta_ry;
+            }
+            changed = true;
+        }
+    }
+
+    if (changed)
+    {
+        for (double &pwm : target_pwms_)
+        {
+            pwm = std::clamp(pwm, 500.0, 2500.0);
+        }
+        publishDirectPwm(context, target_pwms_);
+    }
 }
 
 void VisionTaskState::handleTrigger(
