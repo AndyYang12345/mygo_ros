@@ -11,6 +11,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <limits>
 
 #include <rclcpp/rclcpp.hpp>
 
@@ -850,6 +851,56 @@ private:
     {
         if (frame.size() < 2 || frame.front() != '{' || frame.back() != '}') {
             return std::nullopt;
+        }
+
+        // 新版透传格式: {P1209T0050P1350T1000...}
+        // 顺序映射为舵机 0..N-1；多余项忽略，缺失项保持 last_arm_pwms_。
+        if (frame.find('#') == std::string::npos) {
+            VisionServoFrame parsed{};
+            size_t cursor = 1;
+            size_t servo_id = 0;
+            int min_duration_ms = std::numeric_limits<int>::max();
+
+            while (cursor + 1 < frame.size() && servo_id < kTotalServoCount) {
+                if (frame[cursor] != 'P') {
+                    ++cursor;
+                    continue;
+                }
+
+                int pwm = 0;
+                int duration_ms = 0;
+                size_t duration_mark = 0;
+                if (!parse_digits_until(frame, cursor + 1, 'T', pwm, duration_mark)) {
+                    return std::nullopt;
+                }
+
+                size_t end_mark = duration_mark + 1;
+                if (end_mark >= frame.size() || !std::isdigit(static_cast<unsigned char>(frame[end_mark]))) {
+                    return std::nullopt;
+                }
+
+                duration_ms = 0;
+                while (end_mark < frame.size() && std::isdigit(static_cast<unsigned char>(frame[end_mark]))) {
+                    duration_ms = duration_ms * 10 + (frame[end_mark] - '0');
+                    ++end_mark;
+                }
+
+                parsed.pwm_values[servo_id] = std::clamp(pwm, 500, 2500);
+                parsed.touched[servo_id] = true;
+                if (duration_ms > 0) {
+                    min_duration_ms = std::min(min_duration_ms, duration_ms);
+                }
+
+                ++servo_id;
+                cursor = end_mark;
+            }
+
+            if (servo_id == 0) {
+                return std::nullopt;
+            }
+
+            parsed.duration_ms = (min_duration_ms == std::numeric_limits<int>::max()) ? 50 : min_duration_ms;
+            return parsed;
         }
 
         VisionServoFrame parsed{};
