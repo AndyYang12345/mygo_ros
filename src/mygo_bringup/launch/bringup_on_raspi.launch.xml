@@ -26,7 +26,7 @@
 
     <include file="$(find-pkg-share mygo_moveit_config)/launch/move_group.launch.py" />
 
-    <include file="$(find-pkg-share joystick_parser)/launch/joy_bringup.launch.xml" />
+    <!-- <include file="$(find-pkg-share joystick_parser)/launch/joy_bringup.launch.xml" /> -->
     <node pkg="state_machine" exec="state_machine" output="screen"/>
 
     <node pkg="robot_hardware_interfaces" exec="chassis_serial_node" output="screen"/>
