@@ -52,6 +52,10 @@ void VisionTaskState::onEnter(RobotStateMachineNode *context)
     publishDirectPwm(context, target_pwms_);
     RCLCPP_INFO(context->get_logger(), "Sent vision preset direct PWM target");
 
+    auto query_current = std_msgs::msg::String();
+    query_current.data = "kg";
+    context->getArmQueryCurrentPub()->publish(query_current);
+
     auto camera_start = std_msgs::msg::String();
     camera_start.data = "start";
     context->getCameraStartAppPub()->publish(camera_start);
@@ -79,9 +83,29 @@ void VisionTaskState::handleButton(
 
     if (msg->button_id == 0)
     {
+        auto query_current = std_msgs::msg::String();
+        query_current.data = "kg";
+        context->getArmQueryCurrentPub()->publish(query_current);
+
+        std::array<double, 5> start_pwms = target_pwms_;
+        if (context->getLatestArmCurrentPwm(start_pwms, 1.5)) {
+            target_pwms_ = start_pwms;
+            RCLCPP_INFO(
+                context->get_logger(),
+                "VISION start pose source=/arm/current_pwm yaw=%.1f pitch(servo3)=%.1f",
+                start_pwms[0],
+                start_pwms[3]);
+        } else {
+            RCLCPP_WARN(
+                context->get_logger(),
+                "VISION start pose fallback=local_cache yaw=%.1f pitch(servo3)=%.1f",
+                start_pwms[0],
+                start_pwms[3]);
+        }
+
         auto camera_start = std_msgs::msg::String();
-        camera_start.data = "yaw_pwm:" + std::to_string(static_cast<int>(std::lround(target_pwms_[0]))) +
-                            ",pitch_pwm:" + std::to_string(static_cast<int>(std::lround(target_pwms_[1])));
+        camera_start.data = "yaw_pwm:" + std::to_string(static_cast<int>(std::lround(start_pwms[0]))) +
+                            ",pitch_pwm:" + std::to_string(static_cast<int>(std::lround(start_pwms[3])));
         context->getCameraVisionStartPub()->publish(camera_start);
         tracking_started_ = true;
         RCLCPP_INFO(context->get_logger(), "Requested camera tracking START with init pose: %s", camera_start.data.c_str());

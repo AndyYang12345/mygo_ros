@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <array>
 
 #include "custom_interfaces/msg/button_intent.hpp"
 #include "custom_interfaces/msg/combo_intent.hpp"
@@ -83,6 +84,8 @@ public:
     bool consumeVisionTaskDone();
     bool isVisionTaskDone() const;
 
+    bool getLatestArmCurrentPwm(std::array<double, 5> &pwms, double freshness_seconds = 1.0) const;
+
     void sendStopCommands();
 
 private:
@@ -145,6 +148,11 @@ private:
     rclcpp::Subscription<custom_interfaces::msg::TriggerIntent>::SharedPtr trigger_sub_;
     rclcpp::Subscription<custom_interfaces::msg::ComboIntent>::SharedPtr combo_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr vision_task_done_sub_;
+    rclcpp::Subscription<example_interfaces::msg::Float64MultiArray>::SharedPtr arm_current_pwm_sub_;
+
+    std::array<double, 5> latest_arm_current_pwm_{{1500.0, 1350.0, 2300.0, 1500.0, 1500.0}};
+    rclcpp::Time latest_arm_current_pwm_stamp_{0, 0, RCL_ROS_TIME};
+    bool has_latest_arm_current_pwm_ = false;
 
     rclcpp::Service<custom_interfaces::srv::SetMode>::SharedPtr set_mode_service_;
 

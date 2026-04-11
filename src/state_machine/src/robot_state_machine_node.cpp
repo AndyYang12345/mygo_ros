@@ -285,6 +285,23 @@ bool RobotStateMachineNode::isVisionTaskDone() const
     return vision_task_done_;
 }
 
+bool RobotStateMachineNode::getLatestArmCurrentPwm(std::array<double, 5> &pwms, double freshness_seconds) const
+{
+    if (!has_latest_arm_current_pwm_) {
+        return false;
+    }
+
+    if (freshness_seconds > 0.0) {
+        const double age = (this->now() - latest_arm_current_pwm_stamp_).seconds();
+        if (age > freshness_seconds) {
+            return false;
+        }
+    }
+
+    pwms = latest_arm_current_pwm_;
+    return true;
+}
+
 void RobotStateMachineNode::declareParameters()
 {
     this->declare_parameter<double>("chassis.max_linear_speed", 1.0);
@@ -423,6 +440,20 @@ void RobotStateMachineNode::setupSubscribers()
                 vision_task_done_ = true;
                 RCLCPP_INFO(this->get_logger(), "Received /vision/task_done=true");
             }
+        });
+
+    arm_current_pwm_sub_ = this->create_subscription<example_interfaces::msg::Float64MultiArray>(
+        "/arm/current_pwm", 10,
+        [this](const example_interfaces::msg::Float64MultiArray::SharedPtr msg)
+        {
+            if (!msg || msg->data.size() < 5) {
+                return;
+            }
+            for (size_t i = 0; i < 5; ++i) {
+                latest_arm_current_pwm_[i] = msg->data[i];
+            }
+            latest_arm_current_pwm_stamp_ = this->now();
+            has_latest_arm_current_pwm_ = true;
         });
 
     set_mode_service_ = this->create_service<custom_interfaces::srv::SetMode>(
