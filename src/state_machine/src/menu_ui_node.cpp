@@ -1230,7 +1230,7 @@ private:
   double sub_menu_radius_ = 158.0;
   double main_menu_visibility_ = 0.0;
   double sub_menu_visibility_ = 0.0;
-  double max_linear_speed_ = 0.5;
+  double max_linear_speed_ = 1.0;
   double max_angular_speed_ = 1.0;
   double chassis_linear_norm_target_ = 0.0;
   double chassis_turn_norm_target_ = 0.0;
