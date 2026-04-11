@@ -1260,7 +1260,7 @@ public:
   explicit MenuUiNode(MenuUiWidget * widget)
   : Node("menu_ui_node"), widget_(widget)
   {
-    const double max_linear_speed = declare_parameter<double>("chassis.max_linear_speed", 0.5);
+    const double max_linear_speed = declare_parameter<double>("chassis.max_linear_speed", 1.0);
     const double max_angular_speed = declare_parameter<double>("chassis.max_angular_speed", 1.0);
     const auto status_qos = rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local();
     if (widget_) {
