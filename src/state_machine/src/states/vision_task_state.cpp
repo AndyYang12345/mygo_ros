@@ -81,7 +81,7 @@ void VisionTaskState::handleButton(
     {
         auto camera_start = std_msgs::msg::String();
         camera_start.data = "yaw_pwm:" + std::to_string(static_cast<int>(std::lround(target_pwms_[0]))) +
-                            ",pitch_pwm:" + std::to_string(static_cast<int>(std::lround(target_pwms_[3])));
+                            ",pitch_pwm:" + std::to_string(static_cast<int>(std::lround(target_pwms_[1])));
         context->getCameraVisionStartPub()->publish(camera_start);
         tracking_started_ = true;
         RCLCPP_INFO(context->get_logger(), "Requested camera tracking START with init pose: %s", camera_start.data.c_str());

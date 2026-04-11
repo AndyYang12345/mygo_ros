@@ -85,6 +85,11 @@ public:
             "/cmd/arm/direct_pwm_command",
             10);
 
+        arm_direct_pwm_sub_ = this->create_subscription<example_interfaces::msg::Float64MultiArray>(
+            "/cmd/arm/direct_pwm_command",
+            10,
+            std::bind(&CameraTcpNode::on_arm_direct_pwm_command, this, std::placeholders::_1));
+
         start_sub_ = this->create_subscription<std_msgs::msg::String>(
             "/cmd/camera/start_app",
             10,
@@ -297,6 +302,23 @@ private:
             return;
         }
         vision_task_active_ = (msg->state_name == vision_state_name_);
+    }
+
+    void on_arm_direct_pwm_command(const example_interfaces::msg::Float64MultiArray::SharedPtr msg)
+    {
+        if (!msg || msg->data.empty()) {
+            return;
+        }
+
+        const size_t value_count = std::min(msg->data.size(), kTotalServoCount);
+        for (size_t servo_id = 0; servo_id < value_count; ++servo_id) {
+            const double value = msg->data[servo_id];
+            if (!std::isfinite(value)) {
+                continue;
+            }
+            last_arm_pwms_[servo_id] = static_cast<int>(
+                std::lround(std::clamp(value, 500.0, 2500.0)));
+        }
     }
 
     bool connect_if_needed()
@@ -1094,6 +1116,7 @@ private:
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr query_sub_;
     rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr snap_sub_;
     rclcpp::Subscription<custom_interfaces::msg::RobotState>::SharedPtr robot_state_sub_;
+    rclcpp::Subscription<example_interfaces::msg::Float64MultiArray>::SharedPtr arm_direct_pwm_sub_;
 
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr connection_pub_;
