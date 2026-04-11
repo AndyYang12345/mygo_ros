@@ -287,7 +287,7 @@ bool RobotStateMachineNode::isVisionTaskDone() const
 
 void RobotStateMachineNode::declareParameters()
 {
-    this->declare_parameter<double>("chassis.max_linear_speed", 0.5);
+    this->declare_parameter<double>("chassis.max_linear_speed", 1.0);
     this->declare_parameter<double>("chassis.max_angular_speed", 1.0);
     this->declare_parameter<double>("arm.speed_scale", 0.05);
     this->declare_parameter<double>("joystick.deadzone", 0.1);
