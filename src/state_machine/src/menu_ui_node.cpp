@@ -76,7 +76,7 @@ struct ModeMenuConfig
 const std::array<ModeMenuConfig, 6> kModeMenuConfigs = {{
   // Keep this in sync with the per-state submenu layout.
   {"ARM", {"Right Energy Unit", "under_bridge", "home", "folded", "Left Energy Unit", "-", "Side Energy Unit", "-"}, true},
-  {"CHASSIS", {"MD", "-", "DN", "-", "under_bridge", "-", "folded", "-"}, true},
+  {"CHASSIS", {"MD", "-", "DN", "UP", "under_bridge", "-", "folded", "-"}, true},
   {"VISION_TASK", {"A_START", "B_CANCEL", "-", "-", "-", "-", "-", "-"}, false},
   {"POLE", {"EXIT_POLE_MODE", "-", "-", "-", "-", "-", "-", "-"}, false},
   {"BALL", {"NEXT", "MD", "DN", "UP", "OP", "CL", "-", "-"}, true},

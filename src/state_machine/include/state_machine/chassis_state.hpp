@@ -48,6 +48,7 @@ private:
     void publishArmFoldedCommand(RobotStateMachineNode *context);
     void publishCollectorMiddleCommand(RobotStateMachineNode *context);
     void publishCollectorDownCommand(RobotStateMachineNode *context);
+    void publishCollectorUpCommand(RobotStateMachineNode *context);
     void publishNoOpCommand(RobotStateMachineNode *context);
 
     // 统一底盘控制逻辑。

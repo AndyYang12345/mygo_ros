@@ -18,7 +18,7 @@ ChassisState::ChassisState()
         {"MD", &ChassisState::publishCollectorMiddleCommand},
         {"-", &ChassisState::publishNoOpCommand},
         {"DN", &ChassisState::publishCollectorDownCommand},
-        {"-", &ChassisState::publishNoOpCommand},
+        {"UP", &ChassisState::publishCollectorUpCommand},
         {"under_bridge", &ChassisState::publishArmUnderBridgeCommand},
         {"-", &ChassisState::publishNoOpCommand},
         {"folded", &ChassisState::publishArmFoldedCommand},
@@ -206,6 +206,11 @@ void ChassisState::publishCollectorMiddleCommand(RobotStateMachineNode *context)
 void ChassisState::publishCollectorDownCommand(RobotStateMachineNode *context)
 {
     publishCollectorCommand(context, "DN");
+}
+
+void ChassisState::publishCollectorUpCommand(RobotStateMachineNode *context)
+{
+    publishCollectorCommand(context, "UP");
 }
 
 void ChassisState::publishNoOpCommand(RobotStateMachineNode *context)
