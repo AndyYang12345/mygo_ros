@@ -15,6 +15,7 @@ public:
     std::string getName() const override;
     uint8_t getStateEnum() const override;
     uint8_t getSubState() const override;
+    std::vector<std::string> getAvailableModes() const override;
 
     void onEnter(RobotStateMachineNode *context) override;
     void onExit(RobotStateMachineNode *context) override;

@@ -64,6 +64,16 @@ uint8_t VisionTaskState::getSubState() const
     return static_cast<uint8_t>(energy_mode_ == EnergyMode::Big ? 1 : 0);
 }
 
+std::vector<std::string> VisionTaskState::getAvailableModes() const
+{
+    std::vector<std::string> names;
+    names.reserve(8);
+    for (const char *item : kSubmenuItems) {
+        names.emplace_back(item);
+    }
+    return names;
+}
+
 void VisionTaskState::onEnter(RobotStateMachineNode *context)
 {
     tracking_started_ = false;
