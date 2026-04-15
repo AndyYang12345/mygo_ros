@@ -11,10 +11,32 @@ namespace
 {
 constexpr std::array<double, 5> kVisionInitPwms = {
     1500.0, 1350.0, 2300.0, 1500.0, 1500.0};
+constexpr int kButtonLB = 4;
 constexpr int kButtonX = 2;
 constexpr int kButtonRB = 5;
+constexpr int kButtonB = 1;
 constexpr uint8_t kPressEvent = 0;
 constexpr uint8_t kReleaseEvent = 1;
+constexpr float kSubmenuDeadzone = 0.25F;
+
+const char *kSubmenuItems[8] = {
+    "SMALL", "-", "BIG", "-", "-", "-", "-", "-",
+};
+
+int angleToOctant(float x, float y)
+{
+    const float norm_x = -x;
+    const float norm_y = y;
+    constexpr float kPi = 3.14159265358979323846F;
+    float angle = std::atan2(norm_y, norm_x);
+    if (angle < 0.0F) {
+        angle += 2.0F * kPi;
+    }
+    const float sector = (2.0F * kPi) / 8.0F;
+    int octant = static_cast<int>(std::floor((angle + sector * 0.5F) / sector));
+    octant %= 8;
+    return octant;
+}
 
 void publishDirectPwm(RobotStateMachineNode *context, const std::array<double, 5> &pwms)
 {
@@ -36,7 +58,10 @@ uint8_t VisionTaskState::getStateEnum() const
 
 uint8_t VisionTaskState::getSubState() const
 {
-    return 0;
+    if (submenu_active_) {
+        return static_cast<uint8_t>(std::clamp(submenu_selection_, 0, 7));
+    }
+    return static_cast<uint8_t>(energy_mode_ == EnergyMode::Big ? 1 : 0);
 }
 
 void VisionTaskState::onEnter(RobotStateMachineNode *context)
@@ -44,13 +69,15 @@ void VisionTaskState::onEnter(RobotStateMachineNode *context)
     tracking_started_ = false;
     has_tracking_start_pwms_ = false;
     precision_mode_ = false;
+    submenu_active_ = false;
+    submenu_selection_ = 2;
+    energy_mode_ = EnergyMode::Big;
     right_y_selected_servo_ = 2;
     dpad_switch_latched_ = false;
     target_pwms_ = kVisionInitPwms;
     tracking_start_pwms_ = kVisionInitPwms;
 
-    context->setMenuItems({"A开始追踪", "X重新识别并回到起始位", "B结束识别并返回菜单"});
-    context->setMenuSelection(0);
+    refreshMainUi(context);
 
     publishDirectPwm(context, target_pwms_);
     RCLCPP_INFO(context->get_logger(), "Sent vision preset direct PWM target");
@@ -79,7 +106,35 @@ void VisionTaskState::handleButton(
     RobotStateMachineNode *context,
     const custom_interfaces::msg::ButtonIntent::SharedPtr msg)
 {
-    if (msg->event_type != 0)
+    if (msg->button_id == kButtonLB)
+    {
+        if (msg->event_type == kPressEvent) {
+            submenu_active_ = true;
+            submenu_selection_ = (energy_mode_ == EnergyMode::Big) ? 2 : 0;
+            refreshSubmenuUi(context);
+            RCLCPP_INFO(context->get_logger(), "VISION submenu opened, choose energy mode");
+            return;
+        }
+
+        if (msg->event_type == kReleaseEvent && submenu_active_) {
+            submenu_active_ = false;
+            const bool changed = applyEnergyModeSelection(context);
+            refreshMainUi(context);
+            if (changed) {
+                RCLCPP_INFO(context->get_logger(), "VISION energy mode applied via LB release");
+            }
+            return;
+        }
+    }
+
+    if (submenu_active_ && msg->button_id == kButtonB && msg->event_type == kPressEvent) {
+        submenu_active_ = false;
+        refreshMainUi(context);
+        RCLCPP_INFO(context->get_logger(), "VISION submenu canceled by B");
+        return;
+    }
+
+    if (msg->event_type != kPressEvent)
     {
         return;
     }
@@ -111,7 +166,8 @@ void VisionTaskState::handleButton(
 
         auto camera_start = std_msgs::msg::String();
         camera_start.data = "yaw_pwm:" + std::to_string(static_cast<int>(std::lround(start_pwms[0]))) +
-                            ",pitch_pwm:" + std::to_string(static_cast<int>(std::lround(start_pwms[3])));
+                            ",pitch_pwm:" + std::to_string(static_cast<int>(std::lround(start_pwms[3]))) +
+                            ",tracking:1,sim_mode:" + energyModeToToken(energy_mode_);
         context->getCameraVisionStartPub()->publish(camera_start);
         tracking_started_ = true;
         RCLCPP_INFO(context->get_logger(), "Requested camera tracking START with init pose: %s", camera_start.data.c_str());
@@ -130,7 +186,8 @@ void VisionTaskState::handleButton(
 
         auto camera_start = std_msgs::msg::String();
         camera_start.data = "yaw_pwm:" + std::to_string(static_cast<int>(std::lround(restart_pwms[0]))) +
-                            ",pitch_pwm:" + std::to_string(static_cast<int>(std::lround(restart_pwms[3])));
+                            ",pitch_pwm:" + std::to_string(static_cast<int>(std::lround(restart_pwms[3]))) +
+                            ",tracking:1,sim_mode:" + energyModeToToken(energy_mode_);
         context->getCameraVisionStartPub()->publish(camera_start);
 
         target_pwms_ = restart_pwms;
@@ -171,6 +228,23 @@ void VisionTaskState::handleJoystick(
     RobotStateMachineNode *context,
     const custom_interfaces::msg::JoystickIntent::SharedPtr msg)
 {
+    if (submenu_active_ && msg->joystick_id == 1)
+    {
+        const float x = msg->x;
+        const float y = msg->y;
+        const float radius = std::sqrt(x * x + y * y);
+        if (radius < kSubmenuDeadzone) {
+            return;
+        }
+
+        const int octant = angleToOctant(x, y);
+        if (octant != submenu_selection_) {
+            submenu_selection_ = octant;
+            refreshSubmenuUi(context);
+        }
+        return;
+    }
+
     if (tracking_started_)
     {
         return;
@@ -271,4 +345,71 @@ void VisionTaskState::handleTrigger(
 void VisionTaskState::update(RobotStateMachineNode *context)
 {
     (void)context;
+}
+
+void VisionTaskState::refreshMainUi(RobotStateMachineNode *context)
+{
+    const std::string mode_text = "LB模式:" + std::string(energy_mode_ == EnergyMode::Big ? "大能量" : "小能量");
+    context->setMenuItems({mode_text, "A开始追踪", "X重新识别并回到起始位", "B结束识别并返回菜单"});
+    context->setMenuSelection(1);
+}
+
+void VisionTaskState::refreshSubmenuUi(RobotStateMachineNode *context)
+{
+    std::vector<std::string> items;
+    items.reserve(8);
+    for (const char *name : kSubmenuItems) {
+        items.emplace_back(name);
+    }
+    context->setMenuItems(items);
+    context->setMenuSelection(std::clamp(submenu_selection_, 0, 7));
+}
+
+std::string VisionTaskState::energyModeToToken(EnergyMode mode)
+{
+    return mode == EnergyMode::Big ? "big" : "small";
+}
+
+bool VisionTaskState::applyEnergyModeSelection(RobotStateMachineNode *context)
+{
+    EnergyMode new_mode = energy_mode_;
+    if (submenu_selection_ == 0) {
+        new_mode = EnergyMode::Small;
+    } else if (submenu_selection_ == 2) {
+        new_mode = EnergyMode::Big;
+    } else {
+        RCLCPP_INFO(context->get_logger(), "VISION submenu selected no-op slot, keep current mode");
+        return false;
+    }
+
+    const bool changed = (new_mode != energy_mode_);
+    energy_mode_ = new_mode;
+
+    // Mode switch always triggers re-recognition and simulation regeneration.
+    auto camera_stop = std_msgs::msg::String();
+    camera_stop.data = "stop";
+    context->getCameraVisionStopPub()->publish(camera_stop);
+
+    const std::array<double, 5> &restart_pwms = has_tracking_start_pwms_ ? tracking_start_pwms_ : target_pwms_;
+    publishDirectPwm(context, restart_pwms);
+
+    auto camera_start = std_msgs::msg::String();
+    camera_start.data = "yaw_pwm:" + std::to_string(static_cast<int>(std::lround(restart_pwms[0]))) +
+                        ",pitch_pwm:" + std::to_string(static_cast<int>(std::lround(restart_pwms[3]))) +
+                        ",tracking:0,sim_mode:" + energyModeToToken(energy_mode_);
+    context->getCameraVisionStartPub()->publish(camera_start);
+
+    target_pwms_ = restart_pwms;
+    tracking_start_pwms_ = restart_pwms;
+    has_tracking_start_pwms_ = true;
+    tracking_started_ = false;
+
+    RCLCPP_INFO(
+        context->get_logger(),
+        "VISION mode switched to %s, re-recognition started from yaw=%.1f pitch(servo3)=%.1f",
+        energyModeToToken(energy_mode_).c_str(),
+        restart_pwms[0],
+        restart_pwms[3]);
+
+    return changed;
 }

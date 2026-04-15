@@ -567,6 +567,8 @@ private:
     {
         int yaw_pwm = -1;
         int pitch_pwm = -1;
+        int tracking_flag = 1;
+        uint8_t sim_mode = 0xFF;
 
         std::stringstream ss(request);
         std::string item;
@@ -583,6 +585,16 @@ private:
                     yaw_pwm = std::stoi(value);
                 } else if (key == "pitch_pwm") {
                     pitch_pwm = std::stoi(value);
+                } else if (key == "tracking") {
+                    tracking_flag = std::stoi(value);
+                } else if (key == "sim_mode") {
+                    if (value == "small" || value == "SMALL" || value == "1") {
+                        sim_mode = 1;
+                    } else if (value == "big" || value == "BIG" || value == "2") {
+                        sim_mode = 2;
+                    } else if (value == "off" || value == "OFF" || value == "disabled" || value == "0") {
+                        sim_mode = 0;
+                    }
                 }
             } catch (...) {
                 continue;
@@ -594,10 +606,12 @@ private:
         }
 
         std::vector<uint8_t> body;
-        body.reserve(5);
+        body.reserve(7);
         body.push_back(0xFE);
         append_u16_le(body, static_cast<uint16_t>(yaw_pwm));
         append_u16_le(body, static_cast<uint16_t>(pitch_pwm));
+        body.push_back(tracking_flag != 0 ? 1U : 0U);
+        body.push_back(sim_mode);
         return body;
     }
 
