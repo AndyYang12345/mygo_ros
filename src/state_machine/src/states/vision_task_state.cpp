@@ -186,14 +186,14 @@ void VisionTaskState::handleButton(
 
         auto camera_start = std_msgs::msg::String();
         camera_start.data = "yaw_pwm:" + std::to_string(static_cast<int>(std::lround(restart_pwms[0]))) +
-                            ",pitch_pwm:" + std::to_string(static_cast<int>(std::lround(restart_pwms[3]))) +
-                            ",tracking:1,sim_mode:" + energyModeToToken(energy_mode_);
+                    ",pitch_pwm:" + std::to_string(static_cast<int>(std::lround(restart_pwms[3]))) +
+                    ",tracking:0,sim_mode:" + energyModeToToken(energy_mode_);
         context->getCameraVisionStartPub()->publish(camera_start);
 
         target_pwms_ = restart_pwms;
         tracking_start_pwms_ = restart_pwms;
         has_tracking_start_pwms_ = true;
-        tracking_started_ = true;
+        tracking_started_ = false;
 
         RCLCPP_INFO(
             context->get_logger(),
@@ -228,7 +228,7 @@ void VisionTaskState::handleJoystick(
     RobotStateMachineNode *context,
     const custom_interfaces::msg::JoystickIntent::SharedPtr msg)
 {
-    if (submenu_active_ && msg->joystick_id == 1)
+    if (submenu_active_ && (msg->joystick_id == 1 || msg->joystick_id == 2))
     {
         const float x = msg->x;
         const float y = msg->y;
