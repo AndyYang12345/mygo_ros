@@ -30,7 +30,9 @@ public:
 
 private:
     std::array<double, 5> target_pwms_{};
+    std::array<double, 5> tracking_start_pwms_{};
     bool tracking_started_{false};
+    bool has_tracking_start_pwms_{false};
     bool precision_mode_{false};
     int right_y_selected_servo_{2};
     bool dpad_switch_latched_{false};

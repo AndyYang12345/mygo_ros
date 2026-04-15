@@ -11,6 +11,7 @@ namespace
 {
 constexpr std::array<double, 5> kVisionInitPwms = {
     1500.0, 1350.0, 2300.0, 1500.0, 1500.0};
+constexpr int kButtonX = 2;
 constexpr int kButtonRB = 5;
 constexpr uint8_t kPressEvent = 0;
 constexpr uint8_t kReleaseEvent = 1;
@@ -41,12 +42,14 @@ uint8_t VisionTaskState::getSubState() const
 void VisionTaskState::onEnter(RobotStateMachineNode *context)
 {
     tracking_started_ = false;
+    has_tracking_start_pwms_ = false;
     precision_mode_ = false;
     right_y_selected_servo_ = 2;
     dpad_switch_latched_ = false;
     target_pwms_ = kVisionInitPwms;
+    tracking_start_pwms_ = kVisionInitPwms;
 
-    context->setMenuItems({"A开始追踪", "B结束识别并返回菜单"});
+    context->setMenuItems({"A开始追踪", "X重新识别并回到起始位", "B结束识别并返回菜单"});
     context->setMenuSelection(0);
 
     publishDirectPwm(context, target_pwms_);
@@ -103,12 +106,43 @@ void VisionTaskState::handleButton(
                 start_pwms[3]);
         }
 
+            tracking_start_pwms_ = start_pwms;
+            has_tracking_start_pwms_ = true;
+
         auto camera_start = std_msgs::msg::String();
         camera_start.data = "yaw_pwm:" + std::to_string(static_cast<int>(std::lround(start_pwms[0]))) +
                             ",pitch_pwm:" + std::to_string(static_cast<int>(std::lround(start_pwms[3])));
         context->getCameraVisionStartPub()->publish(camera_start);
         tracking_started_ = true;
         RCLCPP_INFO(context->get_logger(), "Requested camera tracking START with init pose: %s", camera_start.data.c_str());
+        return;
+    }
+
+    if (msg->button_id == kButtonX)
+    {
+        const std::array<double, 5> &restart_pwms = has_tracking_start_pwms_ ? tracking_start_pwms_ : target_pwms_;
+
+        auto camera_stop = std_msgs::msg::String();
+        camera_stop.data = "stop";
+        context->getCameraVisionStopPub()->publish(camera_stop);
+
+        publishDirectPwm(context, restart_pwms);
+
+        auto camera_start = std_msgs::msg::String();
+        camera_start.data = "yaw_pwm:" + std::to_string(static_cast<int>(std::lround(restart_pwms[0]))) +
+                            ",pitch_pwm:" + std::to_string(static_cast<int>(std::lround(restart_pwms[3])));
+        context->getCameraVisionStartPub()->publish(camera_start);
+
+        target_pwms_ = restart_pwms;
+        tracking_start_pwms_ = restart_pwms;
+        has_tracking_start_pwms_ = true;
+        tracking_started_ = true;
+
+        RCLCPP_INFO(
+            context->get_logger(),
+            "Requested camera re-identify from saved start pose: yaw=%.1f pitch(servo3)=%.1f",
+            restart_pwms[0],
+            restart_pwms[3]);
         return;
     }
 
