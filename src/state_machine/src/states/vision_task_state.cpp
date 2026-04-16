@@ -188,9 +188,8 @@ void VisionTaskState::handleButton(
     {
         const std::array<double, 5> &restart_pwms = has_tracking_start_pwms_ ? tracking_start_pwms_ : target_pwms_;
 
-        auto camera_stop = std_msgs::msg::String();
-        camera_stop.data = "stop";
-        context->getCameraVisionStopPub()->publish(camera_stop);
+        // X is a refresh command: force re-recognition from the saved pose.
+        // Do not send stop first, otherwise stop/start on different topics can race and leave app in STOPPED.
 
         publishDirectPwm(context, restart_pwms);
 
