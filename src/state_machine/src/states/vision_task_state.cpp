@@ -191,8 +191,6 @@ void VisionTaskState::handleButton(
         // X is a refresh command: force re-recognition from the saved pose.
         // Do not send stop first, otherwise stop/start on different topics can race and leave app in STOPPED.
 
-        publishDirectPwm(context, restart_pwms);
-
         auto camera_start = std_msgs::msg::String();
         camera_start.data = "yaw_pwm:" + std::to_string(static_cast<int>(std::lround(restart_pwms[0]))) +
                     ",pitch_pwm:" + std::to_string(static_cast<int>(std::lround(restart_pwms[3]))) +
