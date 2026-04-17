@@ -61,7 +61,16 @@ ament_target_dependencies(menu_ui_node
   custom_interfaces
 )
 
+target_link_libraries(state_machine
+  custom_interfaces::custom_interfaces__rosidl_typesupport_cpp
+)
+
+target_link_libraries(arm_joint_servo_test_node
+  custom_interfaces::custom_interfaces__rosidl_typesupport_cpp
+)
+
 target_link_libraries(menu_ui_node
+  custom_interfaces::custom_interfaces__rosidl_typesupport_cpp
   Qt5::Widgets
 )
 
