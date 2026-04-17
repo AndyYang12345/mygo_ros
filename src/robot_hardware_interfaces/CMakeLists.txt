@@ -17,6 +17,15 @@ find_package(tf2 REQUIRED)
 find_package(example_interfaces REQUIRED)
 find_package(custom_interfaces REQUIRED)
 
+set(CUSTOM_INTERFACES_TS_TARGET "")
+if(TARGET custom_interfaces::custom_interfaces__rosidl_typesupport_cpp)
+  set(CUSTOM_INTERFACES_TS_TARGET custom_interfaces::custom_interfaces__rosidl_typesupport_cpp)
+elseif(TARGET custom_interfaces__rosidl_typesupport_cpp)
+  set(CUSTOM_INTERFACES_TS_TARGET custom_interfaces__rosidl_typesupport_cpp)
+else()
+  message(FATAL_ERROR "Cannot find custom_interfaces rosidl_typesupport_cpp target")
+endif()
+
 
 set(targets
     chassis_serial_node
@@ -178,6 +187,31 @@ ament_target_dependencies(commander
   tf2
   custom_interfaces
 )
+
+target_link_libraries(chassis_serial_node
+  ${CUSTOM_INTERFACES_TS_TARGET}
+)
+
+target_link_libraries(arm_serial_node
+  ${CUSTOM_INTERFACES_TS_TARGET}
+)
+
+target_link_libraries(pole_serial_node
+  ${CUSTOM_INTERFACES_TS_TARGET}
+)
+
+target_link_libraries(camera_serial_node
+  ${CUSTOM_INTERFACES_TS_TARGET}
+)
+
+target_link_libraries(vision_bluetooth_bridge_node
+  ${CUSTOM_INTERFACES_TS_TARGET}
+)
+
+target_link_libraries(commander
+  ${CUSTOM_INTERFACES_TS_TARGET}
+)
+
 ament_export_dependencies(rosidl_default_runtime)
 
 ament_package()
