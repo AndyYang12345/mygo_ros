@@ -62,7 +62,7 @@ public:
         camera_host_ = this->declare_parameter<std::string>("camera_host", "192.168.43.19");
         camera_port_ = this->declare_parameter<int>("camera_port", 5555);
         recv_timeout_ms_ = this->declare_parameter<int>("recv_timeout_ms", 3000);
-        status_poll_ms_ = this->declare_parameter<int>("status_poll_ms", 100);
+        status_poll_ms_ = this->declare_parameter<int>("status_poll_ms", 20);
         exit_confirm_word_ = this->declare_parameter<std::string>("exit_confirm_word", "EXIT_NOW");
         forward_only_in_vision_task_ = this->declare_parameter<bool>("forward_only_in_vision_task", true);
         vision_state_name_ = this->declare_parameter<std::string>("vision_state_name", kVisionStateName);
@@ -126,7 +126,7 @@ public:
             std::bind(&CameraTcpNode::on_robot_state, this, std::placeholders::_1));
 
         status_timer_ = this->create_wall_timer(
-            std::chrono::milliseconds(std::max(50, status_poll_ms_)),
+            std::chrono::milliseconds(std::max(5, status_poll_ms_)),
             std::bind(&CameraTcpNode::poll_vision_status, this));
 
         publish_connection_state(false);
