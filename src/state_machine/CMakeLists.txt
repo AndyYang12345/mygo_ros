@@ -16,6 +16,15 @@ find_package(example_interfaces REQUIRED)
 find_package(custom_interfaces REQUIRED)
 find_package(Qt5 REQUIRED COMPONENTS Widgets)
 
+set(CUSTOM_INTERFACES_TS_TARGET "")
+if(TARGET custom_interfaces::custom_interfaces__rosidl_typesupport_cpp)
+  set(CUSTOM_INTERFACES_TS_TARGET custom_interfaces::custom_interfaces__rosidl_typesupport_cpp)
+elseif(TARGET custom_interfaces__rosidl_typesupport_cpp)
+  set(CUSTOM_INTERFACES_TS_TARGET custom_interfaces__rosidl_typesupport_cpp)
+else()
+  message(FATAL_ERROR "Cannot find custom_interfaces rosidl_typesupport_cpp target")
+endif()
+
 add_executable(state_machine
   src/state_machine.cpp
   src/robot_state_machine_node.cpp
@@ -62,15 +71,15 @@ ament_target_dependencies(menu_ui_node
 )
 
 target_link_libraries(state_machine
-  custom_interfaces::custom_interfaces__rosidl_typesupport_cpp
+  ${CUSTOM_INTERFACES_TS_TARGET}
 )
 
 target_link_libraries(arm_joint_servo_test_node
-  custom_interfaces::custom_interfaces__rosidl_typesupport_cpp
+  ${CUSTOM_INTERFACES_TS_TARGET}
 )
 
 target_link_libraries(menu_ui_node
-  custom_interfaces::custom_interfaces__rosidl_typesupport_cpp
+  ${CUSTOM_INTERFACES_TS_TARGET}
   Qt5::Widgets
 )
 
