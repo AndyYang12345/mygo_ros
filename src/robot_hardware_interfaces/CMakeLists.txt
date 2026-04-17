@@ -14,6 +14,7 @@ find_package(trajectory_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(moveit_msgs REQUIRED)
 find_package(tf2 REQUIRED)
+find_package(rosidl_typesupport_cpp REQUIRED)
 find_package(example_interfaces REQUIRED)
 find_package(custom_interfaces REQUIRED)
 
