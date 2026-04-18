@@ -50,9 +50,9 @@ private:
     "home",               // UP (top)
     "folded",             // UP_LEFT
     "Left Energy Unit",   // LEFT
-    "-",                  // DOWN_LEFT
+    "Left Storage",       // DOWN_LEFT
     "Side Energy Unit",   // DOWN
-    "-"                   // DOWN_RIGHT
+    "Right Storage"       // DOWN_RIGHT
   };
 
   bool submenu_active_ = false;
