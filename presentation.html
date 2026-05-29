@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MyGo —— 基于 ROS 2 的全自主移动操作机器人</title>
+<title>MyGo —— 基于 ROS 2 的半自主移动操作机器人</title>
 <style>
 :root {
   --bg: #000000;
@@ -477,12 +477,51 @@ video {
   .two-col, .two-col.wide-left, .two-col.wide-right {
     grid-template-columns: 1fr;
   }
+  .cover-layout {
+    grid-template-columns: 1fr;
+    gap: 1em;
+  }
+  .cover-video {
+    max-height: 35vh;
+  }
+  .cover-right {
+    text-align: center;
+  }
   .card-grid.two, .card-grid.three { grid-template-columns: 1fr; }
   .dots-nav { right: 1vw; }
   .slide { padding: 4vh 5vw; }
 }
 
-/* ===== Video background cover ===== */
+/* ===== Cover Video (两栏封面) ===== */
+.cover-layout {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 2.5em;
+  align-items: center;
+  width: 100%;
+}
+
+.cover-video {
+  width: 100%;
+  max-height: 55vh;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  object-fit: contain;
+  cursor: pointer;
+}
+
+.cover-video:hover {
+  border-color: var(--title);
+}
+
+.cover-right {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* ===== Video background cover (保留用于其他场景) ===== */
 .video-cover {
   position: absolute;
   inset: 0;
@@ -536,33 +575,43 @@ pre code {
 
 <!-- ============ SLIDE 1: 封面 ============ -->
 <div class="slide active" data-index="0">
-  <video class="video-cover" autoplay muted loop playsinline>
-    <source src="img/小车完整形态功能演示-配合UI.mp4" type="video/mp4">
-  </video>
-  <div class="anim">
-    <div class="cover-tag">MYGO · 开源报告会</div>
-  </div>
-  <div class="anim">
-    <h1>MyGo</h1>
-  </div>
-  <div class="anim">
-    <p class="cover-subtitle">基于 ROS 2 的全自主移动操作机器人</p>
-  </div>
-  <div class="anim">
-    <p class="muted" style="margin-top:0.5em;">底盘运动 · 五轴机械臂 · 视觉锁定 · 能量机关全流程自主操作</p>
-  </div>
-  <div class="anim">
-    <div class="cover-meta">
-      <span class="badge purple">ROS 2 Jazzy</span>
-      <span class="badge accent">C++ 17</span>
-      <span class="badge">OpenCV 4.x</span>
-      <span class="badge">MoveIt 2</span>
-      <span class="badge purple">嵌入式</span>
-      <span class="badge accent">2026年5月</span>
+  <div class="cover-layout">
+    <!-- 左侧：完整演示视频（点击播放） -->
+    <div class="anim">
+      <video class="cover-video" controls muted preload="metadata" playsinline>
+        <source src="img/小车完整形态功能演示-配合UI.mp4" type="video/mp4">
+        您的浏览器不支持视频播放
+      </video>
+      <p class="media-caption" style="margin-top:0.4em; text-align:center;">▲ 点击播放查看完整功能演示</p>
     </div>
-  </div>
-  <div class="anim">
-    <p class="muted" style="margin-top:2em;">MyGo 团队视觉负责人 · Harekasa</p>
+    <!-- 右侧：标题与信息 -->
+    <div class="cover-right">
+      <div class="anim">
+        <div class="cover-tag">MYGO · 开源报告会</div>
+      </div>
+      <div class="anim">
+        <h1>MyGo</h1>
+      </div>
+      <div class="anim">
+        <p class="cover-subtitle">基于 ROS 2 的半自主移动操作机器人</p>
+      </div>
+      <div class="anim">
+        <p class="muted" style="margin-top:0.5em;">底盘运动 · 五轴机械臂 · 视觉锁定 · 能量机关全流程自主操作</p>
+      </div>
+      <div class="anim">
+        <div class="cover-meta">
+          <span class="badge purple">ROS 2 Jazzy</span>
+          <span class="badge accent">C++ 17</span>
+          <span class="badge">OpenCV 4.x</span>
+          <span class="badge">MoveIt 2</span>
+          <span class="badge purple">嵌入式</span>
+          <span class="badge accent">2026年5月</span>
+        </div>
+      </div>
+      <div class="anim">
+        <p class="muted" style="margin-top:2em;">MyGo 团队视觉负责人 · Harekasa</p>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -574,13 +623,13 @@ pre code {
   <div class="two-col wide-left anim">
     <div>
       <div class="highlight-bar">
-        <p>面向 RoboMaster 竞赛场景的全自主移动操作平台，实现<strong style="color:var(--accent)">底盘运动</strong>、<strong style="color:var(--accent)">机械臂抓取</strong>、<strong style="color:var(--accent)">能量机关收集与提交</strong>等复杂任务。</p>
+        <p>面向 RoboMaster 竞赛场景的半自主移动操作平台，实现<strong style="color:var(--accent)">底盘运动</strong>、<strong style="color:var(--accent)">机械臂抓取</strong>、<strong style="color:var(--accent)">能量机关收集与提交</strong>等复杂任务。</p>
       </div>
       <ul class="bullet-list" style="margin-top:1em;">
-        <li>轮式差分驱动底盘 + 5-DOF 机械臂 + 两指对称夹爪 + 可旋转回收杆</li>
-        <li>ROS 2 Jazzy 分布式架构，真机部署 Raspberry Pi 4B + STM32</li>
-        <li>手柄遥控 + 视觉辅助双模融合，半自主/全自主任务执行</li>
-        <li>独立视觉模块，基于 MaixCam2 嵌入式平台，仿真预研后再上实机</li>
+        <li><strong style="color:var(--accent)">履带式</strong>差分驱动底盘 + 5-DOF 总线舵机机械臂 + 双旋杆 + 可抬升小球收集装置</li>
+        <li>ROS 2 Jazzy 分布式架构，Raspberry Pi 4B + STM32F407(底盘) + STM32F103(机械臂/车载)</li>
+        <li>USB 模拟串口连接，开机自启 + 串口绑定自动识别，类《终末地》派状 UI 操控</li>
+        <li>独立视觉模块，PC端 OpenCV 仿真 → MaixCDK 交叉编译 → MaixCam2 部署</li>
       </ul>
     </div>
     <div>
@@ -596,7 +645,7 @@ pre code {
     <h2>系统架构设计</h2>
   </div>
   <div class="anim" style="margin-bottom:1em;">
-    <p class="muted">五层解耦：输入抽象层 → 决策层 → 硬件驱动层 → 嵌入式执行层 + 独立视觉模块</p>
+    <p class="muted">五层解耦：输入抽象层 → 决策层 → 硬件驱动层 → USB模拟串口 → 嵌入式执行层 + 独立视觉模块 (TCP通信)</p>
   </div>
   <div class="steps anim">
     <div class="step" data-num="1">
@@ -624,7 +673,7 @@ pre code {
     <div class="card-grid three">
       <div class="card">
         <h3>🎯 分层解耦</h3>
-        <p>每层独立可测，数据通过标准化接口传递，视觉模块仅用 cv::Mat 与主控通信</p>
+        <p>每层独立可测，数据通过标准化接口传递，视觉模块独立运行，通过 <strong style="color:var(--accent)">TCP 网络协议</strong> 经树莓派中转与主控通信</p>
       </div>
       <div class="card">
         <h3>🔄 状态驱动</h3>
@@ -662,6 +711,7 @@ pre code {
         <tr><td style="color:var(--accent)">CHASSIS</td><td>底盘模式 + 8子模式</td></tr>
         <tr><td style="color:var(--accent)">ARM</td><td>摇杆XYZ + 夹爪 + 预设动作</td></tr>
         <tr><td style="color:var(--accent)">MENU</td><td>摇杆导航 + 扳机确认</td></tr>
+        <tr><td style="color:var(--accent)">POLE</td><td>回收杆模式，扳机控制旋转</td></tr>
         <tr><td style="color:var(--accent)">VISION</td><td>视觉锁定辅助操控</td></tr>
         <tr><td style="color:var(--accent)">EMERGENCY</td><td>立即刹停所有执行器</td></tr>
       </table>
@@ -670,8 +720,8 @@ pre code {
   <div class="card-grid two anim">
     <div class="card">
       <h3>🔌 硬件驱动层</h3>
-      <p>6 个串口节点：chassis / arm / pole / collector / camera / bluetooth</p>
-      <p style="color:var(--muted)">统一基类 SendCommand 封装 termios 串口帧协议 + CRC 校验</p>
+      <p>6 个串口节点：chassis / arm / pole / collector / camera / TCP bridge</p>
+      <p style="color:var(--muted)">统一基类 SendCommand 封装 USB模拟串口（termios），底盘下发形如 #0.23,0.33 差速指令</p>
     </div>
     <div class="card">
       <h3>📦 自定义接口</h3>
@@ -691,21 +741,21 @@ pre code {
       <div class="card" style="margin-bottom:1em;">
         <h3>🤖 机器人模型</h3>
         <ul class="bullet-list">
-          <li>5-DOF 连续旋转关节 (joint1~5)</li>
+          <li>5-DOF 连续旋转关节 (joint1~5) + 总线舵机</li>
           <li>2-DOF 对称 mimic 夹爪</li>
-          <li>差分驱动轮式底盘</li>
+          <li><strong style="color:var(--accent)">履带式</strong>差分驱动底盘</li>
           <li>STL 网格碰撞模型</li>
-          <li>Gazebo + ros2_control 仿真就绪</li>
+          <li>相机通过3D打印件固定在 pitch 轴</li>
         </ul>
       </div>
       <div class="card">
         <h3>📐 运动规划</h3>
         <ul class="bullet-list">
           <li>IK 求解器：KDL / LMA 可配置</li>
-          <li>控制器：JointTrajectoryController</li>
+          <li>MoveIt2 规划 + 手动封装硬件接口</li>
           <li>碰撞检测：SRDF 自碰撞矩阵</li>
-          <li>轨迹数据库：Warehouse 持久化</li>
-          <li>硬件状态同步防止预设回弹</li>
+          <li>右肩键(RB)切换预设位姿</li>
+          <li>⚠ 整车模型面数过高，树莓派启动需1-2分钟</li>
         </ul>
       </div>
     </div>
@@ -722,7 +772,7 @@ pre code {
     <h2>视觉模块总览</h2>
   </div>
   <div class="anim">
-    <p class="muted" style="margin-bottom:1em;">独立 C++ 项目（Mygo/），仿真层与识别控制层编译为独立库，通过 cv::Mat 接口传递数据</p>
+    <p class="muted" style="margin-bottom:1em;">独立 C++ 项目（Mygo/），仿真层与识别控制层编译为独立库，通过 cv::Mat 接口传递数据。PC端 OpenCV 仿真 → MaixCDK 交叉编译 → MaixCam2 部署，相机固定在机械臂 pitch 轴上</p>
   </div>
   <div class="ipo-circle anim">
     <div class="node input">
@@ -870,9 +920,9 @@ pre code {
         </div>
       </div>
       <div class="card" style="margin-top:1em;">
-        <h3>双轴 PID 参数</h3>
-        <p>积分限幅 30° | 输出限幅 180°/s | 微分低通 | 死区 8px</p>
-        <p class="muted">$K_i$ 宜小 · 优先降低 $K_d$ 减小超调 · 收紧步进抑制振荡</p>
+        <h3>追踪控制策略演进</h3>
+        <p style="color:var(--muted); font-size:0.85rem;">V1 像素误差PID → V2 单目测距开环+闭环修正 → 最终折衷方案：ROI+Kalman+PID</p>
+        <p style="color:var(--accent); font-size:0.8rem; margin-top:0.5em;">⚠ 实机挑战：相机固连机械臂（外参难标定）、环境光照复杂、机械臂运动导致控制滞后</p>
       </div>
     </div>
     <div>
@@ -914,6 +964,7 @@ pre code {
     <h3>📊 适应度函数（多轨迹综合评估）</h3>
     <p>随机跳跃 × N + 正弦追踪 × N + 圆周追踪 × N + 李萨如轨迹 × N</p>
     <p>评分维度：<span style="color:var(--accent)">时间效率 $w_t$</span> + <span style="color:var(--accent)">跟踪误差 $w_e$</span> + <span style="color:var(--accent)">控制平滑度 $w_s$</span></p>
+    <p style="color:var(--muted); margin-top:0.8em; font-size:0.85rem;">⚠ 仿真仅需数秒，实机迭代需半小时以上。仿真PID仅供参考，最终采用<strong style="color:var(--accent)">人工调参</strong></p>
   </div>
 </div>
 
@@ -933,7 +984,7 @@ pre code {
     </div>
     <div class="card">
       <h3>🎮 仿真可视化</h3>
-      <p>Gazebo · RViz2 · Xacro/URDF · STL 网格</p>
+      <p>RViz2 · Xacro/URDF · STL 网格</p>
     </div>
     <div class="card">
       <h3>👁️ 视觉算法</h3>
@@ -941,7 +992,7 @@ pre code {
     </div>
     <div class="card">
       <h3>🔌 底层通信</h3>
-      <p>Linux termios · STM32 · MaixCam2 · 蓝牙桥接 · sensor_msgs/Joy</p>
+      <p>USB模拟串口 (termios) · STM32F407/F103 · MaixCam2 · TCP 网络通信 · sensor_msgs/Joy</p>
     </div>
     <div class="card">
       <h3>🖥️ 工程化</h3>
@@ -966,9 +1017,9 @@ pre code {
       <h3 style="color:var(--title)">ROS 2 主控系统</h3>
       <ul class="bullet-list" style="margin-bottom:1.5em;">
         <li>4 层解耦架构，各层独立可测可替换</li>
-        <li>8 主状态 + 14+ 子状态，覆盖竞赛全流程</li>
-        <li>手柄操控 + 视觉引导双模融合</li>
-        <li>MoveIt2 + 硬件反馈闭环防回弹</li>
+        <li>8 主状态 + 14+ 子状态 + 派状 UI 操控</li>
+        <li>手柄操控 + MoveIt2 预设轨迹双模融合</li>
+        <li>USB 模拟串口 + 开机自启 + 乱序自动识别</li>
         <li>11 种语义化消息 + 1 种服务</li>
       </ul>
     </div>
@@ -976,15 +1027,18 @@ pre code {
       <h3 style="color:var(--accent)">视觉模块</h3>
       <ul class="bullet-list" style="margin-bottom:1.5em;">
         <li>仿真驱动开发，不依赖外部引擎</li>
-        <li>BGR/HSV/LAB 三空间自适应融合</li>
+        <li>BGR/HSV/LAB 三空间自适应融合 + 圆形度筛选</li>
         <li>自研 3D 投影模型 + 双相机视角</li>
-        <li>遗传算法自动搜索最优 PID</li>
-        <li>仿真-实机无缝迁移同一套代码</li>
+        <li>遗传算法探索（仿真参考 + 人工调参）</li>
+        <li>PC仿真 → MaixCDK 交叉编译 → MaixCam2 部署</li>
       </ul>
     </div>
   </div>
   <div class="quote-block anim">
-    <p>"一份代码，PC 仿真验证 → MaixCam2 嵌入式部署，零改动迁移。"</p>
+    <p>"一份代码，PC 仿真验证 → MaixCDK 交叉编译 → MaixCam2 嵌入式部署。"</p>
+  </div>
+  <div class="anim" style="text-align:center; margin-top:1.5em;">
+    <p class="muted" style="font-size:0.9rem; max-width:700px; margin:0 auto;">仿真到现实的差距是最大的挑战：遗传算法在仿真中效果良好但实机不适用，追踪方案受限于相机固定方式和环境复杂性。工程实践中需要灵活取舍。</p>
   </div>
   <div class="anim" style="text-align:center; margin-top:1.5em;">
     <span class="badge purple">ROS 2 Jazzy</span>
