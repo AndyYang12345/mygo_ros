@@ -47,7 +47,7 @@ body {
 .slide {
   position: absolute;
   inset: 0;
-  padding: 5vh 7vw;
+  padding: 3.5vh 6vw;
   opacity: 0;
   visibility: hidden;
   transform: translateY(30px);
@@ -71,34 +71,34 @@ body {
 
 /* ===== Typography ===== */
 h1 {
-  font-size: clamp(2.5rem, 5vw, 4.5rem);
+  font-size: clamp(2rem, 4.5vw, 3.8rem);
   font-weight: 800;
   color: var(--title);
-  line-height: 1.2;
-  margin-bottom: 0.3em;
+  line-height: 1.1;
+  margin-bottom: 0.2em;
 }
 
 h2 {
-  font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+  font-size: clamp(1.5rem, 3vw, 2.4rem);
   font-weight: 700;
   color: var(--title);
-  margin-bottom: 0.6em;
-}
-
-h3 {
-  font-size: clamp(1.2rem, 2vw, 1.6rem);
-  font-weight: 700;
-  color: var(--accent);
   margin-bottom: 0.4em;
 }
 
+h3 {
+  font-size: clamp(1rem, 1.8vw, 1.3rem);
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 0.3em;
+}
+
 p, li {
-  font-size: clamp(0.95rem, 1.5vw, 1.15rem);
-  line-height: 1.7;
+  font-size: clamp(0.82rem, 1.3vw, 1rem);
+  line-height: 1.55;
   color: var(--text);
 }
 
-.muted { color: var(--muted); font-size: 0.9em; }
+.muted { color: var(--muted); font-size: 0.82em; }
 
 /* ===== Cover Page ===== */
 .cover-subtitle {
@@ -152,9 +152,9 @@ p, li {
 /* ===== Card Grid ===== */
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1.2em;
-  margin-top: 1em;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.8em;
+  margin-top: 0.7em;
 }
 
 .card-grid.two { grid-template-columns: repeat(2, 1fr); }
@@ -163,37 +163,38 @@ p, li {
 .card {
   background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 1.5em;
+  border-radius: 10px;
+  padding: 1em;
   transition: border-color 0.3s;
 }
 
 .card:hover { border-color: var(--title); }
 
 .card h3 {
-  margin-bottom: 0.5em;
+  margin-bottom: 0.3em;
+  font-size: clamp(0.9rem, 1.5vw, 1.1rem);
 }
 
 .card p, .card li {
-  font-size: 0.9rem;
-  line-height: 1.6;
+  font-size: 0.78rem;
+  line-height: 1.45;
 }
 
 /* ===== Steps ===== */
 .steps {
   display: flex;
-  gap: 1em;
+  gap: 0.6em;
   flex-wrap: wrap;
-  margin-top: 1em;
+  margin-top: 0.6em;
 }
 
 .step {
   flex: 1;
-  min-width: 180px;
+  min-width: 140px;
   background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 1.5em;
+  border-radius: 10px;
+  padding: 1em 0.8em;
   text-align: center;
   position: relative;
 }
@@ -201,18 +202,18 @@ p, li {
 .step::before {
   content: attr(data-num);
   display: block;
-  width: 40px; height: 40px;
-  line-height: 40px;
-  margin: 0 auto 0.8em;
+  width: 32px; height: 32px;
+  line-height: 32px;
+  margin: 0 auto 0.5em;
   border-radius: 50%;
   background: var(--title);
   color: var(--bg);
   font-weight: 800;
-  font-size: 1.1rem;
+  font-size: 0.9rem;
 }
 
-.step h4 { color: var(--accent); margin-bottom: 0.4em; font-size: 1rem; }
-.step p { font-size: 0.85rem; color: var(--muted); }
+.step h4 { color: var(--accent); margin-bottom: 0.3em; font-size: 0.85rem; }
+.step p { font-size: 0.72rem; color: var(--muted); }
 
 /* ===== Highlight Bar ===== */
 .highlight-bar {
@@ -262,20 +263,20 @@ p, li {
 table {
   width: 100%;
   border-collapse: collapse;
-  margin: 1em 0;
-  font-size: 0.9rem;
+  margin: 0.6em 0;
+  font-size: 0.75rem;
 }
 
 th {
   text-align: left;
   color: var(--accent);
-  padding: 0.6em 0.8em;
+  padding: 0.35em 0.6em;
   border-bottom: 2px solid var(--border);
   font-weight: 700;
 }
 
 td {
-  padding: 0.5em 0.8em;
+  padding: 0.3em 0.6em;
   border-bottom: 1px solid var(--border);
   color: var(--text);
 }
@@ -283,51 +284,51 @@ td {
 /* ===== Media ===== */
 img {
   max-width: 100%;
-  max-height: 55vh;
+  max-height: 40vh;
   border-radius: 8px;
   object-fit: contain;
   display: block;
-  margin: 0.5em auto;
+  margin: 0.3em auto;
 }
 
 video {
   max-width: 100%;
-  max-height: 55vh;
+  max-height: 40vh;
   border-radius: 8px;
   display: block;
-  margin: 0.5em auto;
+  margin: 0.3em auto;
 }
 
 .media-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1em;
-  margin-top: 1em;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.6em;
+  margin-top: 0.6em;
 }
 
 .media-grid video, .media-grid img {
   width: 100%;
-  max-height: 30vh;
+  max-height: 22vh;
   object-fit: cover;
 }
 
 .media-caption {
   text-align: center;
   color: var(--muted);
-  font-size: 0.8rem;
-  margin-top: 0.3em;
+  font-size: 0.7rem;
+  margin-top: 0.2em;
 }
 
 /* ===== Two Column ===== */
 .two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 2em;
+  gap: 1.2em;
   align-items: start;
 }
 
-.two-col.wide-left { grid-template-columns: 1.2fr 0.8fr; }
-.two-col.wide-right { grid-template-columns: 0.8fr 1.2fr; }
+.two-col.wide-left { grid-template-columns: 1.15fr 0.85fr; }
+.two-col.wide-right { grid-template-columns: 0.85fr 1.15fr; }
 
 /* ===== IPO Circle ===== */
 .ipo-circle {
@@ -854,55 +855,58 @@ pre code {
 .gh-card {
   display: inline-flex;
   align-items: center;
-  gap: 0.6em;
-  padding: 0.5em 1em;
-  border-radius: 10px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--border);
-  font-size: 0.72rem;
-  color: var(--muted);
+  gap: 0.4em;
+  padding: 0.35em 0.7em;
+  border-radius: 8px;
+  background: rgba(255,196,2,0.06);
+  border: 1px solid rgba(255,196,2,0.25);
+  font-size: 0.68rem;
+  color: var(--text);
   text-decoration: none;
   transition: all 0.25s ease;
   cursor: pointer;
 }
 
 .gh-card:hover {
-  border-color: var(--title);
-  background: rgba(185,142,255,0.08);
-  color: var(--text);
+  border-color: var(--accent);
+  background: rgba(255,196,2,0.12);
+  color: var(--accent);
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(185,142,255,0.1);
+  box-shadow: 0 4px 16px rgba(255,196,2,0.15);
 }
 
 .gh-card .gh-icon {
-  font-size: 1.2rem;
+  font-size: 1rem;
   flex-shrink: 0;
 }
 
 .gh-card .gh-name {
   font-weight: 700;
-  color: var(--title);
-  font-size: 0.75rem;
+  color: var(--accent);
+  font-size: 0.7rem;
 }
 
 .gh-card .gh-desc {
   color: var(--muted);
-  font-size: 0.62rem;
+  font-size: 0.58rem;
 }
 
-.gh-card.accent-gh { border-color: var(--accent); }
-.gh-card.accent-gh .gh-name { color: var(--accent); }
-.gh-card.vis-gh { border-color: #4ecdc4; }
+.gh-card.ros-gh { border-color: rgba(185,142,255,0.3); }
+.gh-card.ros-gh .gh-name { color: var(--title); }
+.gh-card.ros-gh:hover { border-color: var(--title); background: rgba(185,142,255,0.1); box-shadow: 0 4px 16px rgba(185,142,255,0.12); }
+.gh-card.vis-gh { border-color: rgba(78,205,196,0.3); }
 .gh-card.vis-gh .gh-name { color: #4ecdc4; }
-.gh-card.sim-gh { border-color: #ff6b6b; }
+.gh-card.vis-gh:hover { border-color: #4ecdc4; background: rgba(78,205,196,0.1); box-shadow: 0 4px 16px rgba(78,205,196,0.12); }
+.gh-card.sim-gh { border-color: rgba(255,107,107,0.3); }
 .gh-card.sim-gh .gh-name { color: #ff6b6b; }
+.gh-card.sim-gh:hover { border-color: #ff6b6b; background: rgba(255,107,107,0.1); box-shadow: 0 4px 16px rgba(255,107,107,0.12); }
 
 .gh-row {
   display: flex;
-  gap: 0.6em;
+  gap: 0.4em;
   flex-wrap: wrap;
   align-items: center;
-  margin-top: 0.6em;
+  margin-top: 0.5em;
 }
 
 /* ===== Footer Link ===== */
@@ -1677,7 +1681,7 @@ pre code {
         <span class="gh-icon">🎯</span>
         <div><span class="gh-name">MygoVison</span><br><span class="gh-desc">PC 仿真环境</span></div>
       </a>
-      <a class="gh-card accent-gh" href="https://github.com/AndyYang12345" target="_blank" rel="noopener">
+      <a class="gh-card ros-gh" href="https://github.com/AndyYang12345" target="_blank" rel="noopener">
         <span class="gh-icon">👤</span>
         <div><span class="gh-name">@AndyYang12345</span><br><span class="gh-desc">GitHub 主页</span></div>
       </a>
